@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>My_AGENT — ATS CV Builder</title>
+  <title>My_AGENT - ATS CV Builder</title>
   <style>
     :root {
       --bg: #141726;
@@ -29,7 +29,7 @@
       padding: 2rem 1rem;
     }
     .card {
-      max-width: 640px;
+      max-width: 660px;
       width: 100%;
       background: var(--card);
       border: 1px solid #2f3550;
@@ -47,6 +47,14 @@
       margin-bottom: 1.2rem;
     }
     p { color: var(--muted); line-height: 1.55; }
+    ul {
+      text-align: left;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: .93rem;
+      margin: 0 0 1.2rem;
+      padding-left: 1.2rem;
+    }
     code {
       display: block;
       text-align: left;
@@ -58,6 +66,7 @@
       overflow-x: auto;
       font-size: .9rem;
       margin: 1rem 0 1.3rem;
+      white-space: pre;
     }
     a.btn {
       display: inline-block;
@@ -75,14 +84,20 @@
     <h1>My_AGENT</h1>
     <div class="by">Created by Satyam Singh Bhadoriya</div>
     <p>
-      Browser-based ATS CV builder. GitHub Pages hosts this project page only —
-      run the Python app locally after cloning.
+      An ATS CV builder that runs in your browser from your own computer.
+      This is the project page only; the app itself runs locally.
     </p>
+    <ul>
+      <li>Upload a CV, paste a job description, generate an ATS-friendly CV</li>
+      <li>Build a CV from scratch, with an optional profile photo</li>
+      <li>Generate a short cold email for HR referrals from any CV</li>
+      <li>Download as PDF, DOCX, or XLSX</li>
+    </ul>
     <code>git clone https://github.com/satyamsingh24/My_Agent.git
 cd My_Agent
 python -m pip install -r requirements.txt
 python -m streamlit run app.py</code>
-    <p>App opens at <strong>http://localhost:6932</strong>. PIN: <strong>6932</strong>.</p>
+    <p>App opens at <strong>http://localhost:6932</strong> &middot; PIN: <strong>6932</strong></p>
     <a class="btn" href="https://github.com/satyamsingh24/My_Agent">View source on GitHub</a>
   </main>
 </body>
