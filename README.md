@@ -95,7 +95,29 @@ Linux/macOS par activate: `source .venv/bin/activate`
 Download file names random hote hain: `My_Agent_12345.pdf`, `.docx`, `.xlsx`
 (ek generation ke teeno format same number use karte hain).
 
-## Files kahan save hoti hain
+## Online par app chalana (bina code download kiye)
+
+GitHub Pages sirf static page host karta hai, Streamlit app nahi. App ko browser
+par live karne ke liye **Streamlit Community Cloud** (free) use karo:
+
+1. [share.streamlit.io](https://share.streamlit.io) kholo aur GitHub se sign in karo.
+2. **Create app** → **Deploy a public app from GitHub** choose karo.
+3. Repository: `satyamsingh24/My_Agent`, Branch: `main`, Main file: `app.py`.
+4. **Deploy** dabao. Pehli build mein 2-3 minute lagte hain.
+
+Live URL milegi jaise `https://my-agent.streamlit.app` — koi bhi user usse
+frontend check kar sakta hai, kuch download karne ki zaroorat nahi.
+
+Hosted mode mein app khud detect kar leti hai ki woh server par chal rahi hai:
+
+- Uploaded CV sirf us visitor ke **browser session** mein rehta hai, server ki
+  disk par save nahi hota, aur doosre visitors ko dikhta nahi.
+- Generated PDF/DOCX/XLSX sirf download button se milte hain; server par file
+  copy nahi banti.
+- PIN (`6932`) public repo mein hai, isliye hosted app ko private samajhna galat
+  hoga — demo ke liye theek hai.
+
+## Files kahan save hoti hain (local run)
 
 - Existing uploaded CV: `app_data/existing_cv.pdf`
 - Extracted information: `app_data/existing_cv.txt`

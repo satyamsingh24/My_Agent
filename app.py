@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
@@ -329,6 +330,40 @@ def backdrop_photo_uri() -> str:
     return ""
 
 
+@st.cache_data(show_spinner=False)
+def _is_local_host(host: str) -> bool:
+    name = host.split(":")[0].lower()
+    return name in {"localhost", "127.0.0.1", "0.0.0.0", "::1", ""}
+
+
+def is_hosted() -> bool:
+    """True when the app is served to visitors instead of running locally."""
+    try:
+        host = st.context.headers.get("host", "")
+    except Exception:
+        return False
+    return not _is_local_host(host)
+
+
+def current_cv() -> tuple[dict, str, bytes] | None:
+    """Hosted visitors keep their CV in their own session, never on disk."""
+    if is_hosted():
+        return st.session_state.get("session_cv")
+    return load_existing_cv()
+
+
+def store_cv(pdf_bytes: bytes, original_name: str, text: str) -> dict:
+    if is_hosted():
+        meta = {
+            "original_name": original_name,
+            "uploaded_at": datetime.now().isoformat(timespec="seconds"),
+            "characters": len(text),
+        }
+        st.session_state["session_cv"] = (meta, text, pdf_bytes)
+        return meta
+    return save_existing_cv(pdf_bytes, original_name, text)
+
+
 def owner_photo_uri() -> str:
     """Base64 data URI for the bundled passport-size owner photo."""
     if not OWNER_PHOTO.exists():
@@ -446,6 +481,20 @@ def clear_cv_session() -> None:
     st.session_state["change_cv"] = False
 
 
+def privacy_note() -> str:
+    if is_hosted():
+        return (
+            "<strong>Privacy:</strong> your CV stays in your own browser session "
+            "and is never saved on the server or shared with other visitors. "
+            "This app never logs in to a job portal or applies on your behalf."
+        )
+    return (
+        "<strong>Privacy:</strong> your CV and all generated files stay in the "
+        "My_Agent folder on this computer. This app never logs in to a job "
+        "portal or applies on your behalf."
+    )
+
+
 def step(number: int, label: str) -> None:
     st.markdown(
         f'<div class="step"><span class="num">{number}</span>{label}</div>',
@@ -480,13 +529,20 @@ def build_all_formats(
     pdf_bytes = build_ats_pdf(text, title=stem, photo_bytes=photo_bytes)
     docx_bytes = build_ats_docx(text, title=stem, photo_bytes=photo_bytes)
     xlsx_bytes = build_cv_xlsx(text, title=stem, photo_bytes=photo_bytes)
+    hosted = is_hosted()
+
+    def keep(data: bytes, filename: str) -> str:
+        if hosted:
+            return ""
+        return str(save_generated(data, filename))
+
     return {
         "pdf": {
             "label": "PDF",
             "data": pdf_bytes,
             "filename": stem + ".pdf",
             "mime": "application/pdf",
-            "path": str(save_generated(pdf_bytes, stem + ".pdf")),
+            "path": keep(pdf_bytes, stem + ".pdf"),
         },
         "docx": {
             "label": "DOCX",
@@ -496,7 +552,7 @@ def build_all_formats(
                 "application/vnd.openxmlformats-officedocument."
                 "wordprocessingml.document"
             ),
-            "path": str(save_generated(docx_bytes, stem + ".docx")),
+            "path": keep(docx_bytes, stem + ".docx"),
         },
         "xlsx": {
             "label": "XLSX",
@@ -506,7 +562,7 @@ def build_all_formats(
                 "application/vnd.openxmlformats-officedocument."
                 "spreadsheetml.sheet"
             ),
-            "path": str(save_generated(xlsx_bytes, stem + ".xlsx")),
+            "path": keep(xlsx_bytes, stem + ".xlsx"),
         },
     }
 
@@ -615,16 +671,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-existing = load_existing_cv()
+existing = current_cv()
 
 if screen == "home":
     step(1, "Choose an option")
+    upload_note = (
+        "Upload a CV PDF. It stays in your own browser session only."
+        if is_hosted()
+        else "Upload a new CV PDF. Your details are saved on this computer."
+    )
     left, right, third = st.columns(3)
     with left:
         st.markdown(
             '<div class="option-card d1"><div class="ic">⬆</div>'
             "<h4>1. Upload CV</h4>"
-            "<p>Upload a new CV PDF. Your details are saved on this computer.</p>"
+            f"<p>{upload_note}</p>"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -670,7 +731,7 @@ elif screen == "upload":
             extracted = extract_pdf_text(file_bytes)
             st.success(f"Text extracted: {len(extracted)} characters")
             if st.button("Use this CV", type="primary"):
-                meta = save_existing_cv(file_bytes, uploaded.name, extracted)
+                meta = store_cv(file_bytes, uploaded.name, extracted)
                 activate_cv(meta, extracted, file_bytes)
                 st.rerun()
         except Exception as exc:
@@ -716,7 +777,7 @@ elif screen == "existing":
                     replacement_bytes = replacement.getvalue()
                     replacement_text = extract_pdf_text(replacement_bytes)
                     if st.button("Save and continue", type="primary"):
-                        new_meta = save_existing_cv(
+                        new_meta = store_cv(
                             replacement_bytes, replacement.name, replacement_text
                         )
                         activate_cv(new_meta, replacement_text, replacement_bytes)
@@ -1165,8 +1226,6 @@ if st.session_state.get("cv_ready") and screen in {"upload", "existing"}:
 
 st.divider()
 st.markdown(
-    '<div class="privacy"><strong>Privacy:</strong> your CV and all generated '
-    "files stay in the My_Agent folder on this computer. This app never logs in "
-    "to a job portal or applies on your behalf.</div>",
+    f'<div class="privacy">{privacy_note()}</div>',
     unsafe_allow_html=True,
 )
