@@ -1,0 +1,10 @@
+[browser]
+gatherUsageStats = false
+serverPort = 6932
+
+[server]
+headless = false
+port = 6932
+
+[theme]
+base = "dark"

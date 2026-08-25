@@ -1,0 +1,20 @@
+# Editor / tooling folders
+.cursor/
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Local app data (personal CV and metadata)
+app_data/
+
+# Generated CVs
+applications/generated/
+
+# Optional custom background image
+assets/background.*

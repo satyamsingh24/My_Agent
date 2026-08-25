@@ -1,0 +1,55 @@
+SATYAM SINGH BHADORIYA
+DevOps Engineer
+8962373424 | Satyam.bhadoriya6932@gmail.com | Indore, Madhya Pradesh
+
+SUMMARY
+DevOps Engineer with 7+ months of professional experience plus internship experience in CI/CD, cloud infrastructure, and automation. Hands-on with Amazon Web Services (AWS), Linux, Git, Docker, Kubernetes, Terraform, Jenkins, and GitHub Actions. Builds Infrastructure as Code (IaC) and monitoring using Datadog, Grafana, Prometheus, and CloudWatch. Background in Java, Spring, Hibernate, and object-oriented programming.
+
+SKILLS
+Cloud: AWS, Azure, EC2, IAM, S3, RDS, Lambda, CloudWatch, Route53, SQS, SNS, KMS, VPC, Security Groups, VPN
+CI/CD: Jenkins, GitHub Actions
+Infrastructure as Code: Terraform, Ansible
+Containers: Docker, Kubernetes, Helm
+Version control: Git, GitHub
+Web servers and hosting: Nginx, Apache, Tomcat, Hostinger
+Databases: MySQL, MariaDB, AWS DynamoDB
+Operating systems: Linux (Ubuntu, CentOS), Windows
+Networking and security: VPC, IAM, Security Groups, VPN, Cloudflare CDN
+Monitoring: Datadog, Grafana, Prometheus, Tempo, Alloy, CloudWatch
+Languages and scripting: Python, Java, Shell, Bash, OOP
+
+PROFESSIONAL EXPERIENCE
+
+DevOps Engineer
+Nenosystems Consultancy Services
+January 2026 – Present
+- Build and maintain CI/CD pipelines in Jenkins and GitHub Actions for automated build, test, and deployment.
+- Design AWS infrastructure with Terraform (Infrastructure as Code) for repeatable deployments.
+- Containerize applications with Docker and deploy on Kubernetes, including storage, networking, and security.
+- Operate AWS services including EC2, IAM, S3, RDS, Lambda, CloudWatch, Route53, SQS, and SNS.
+- Monitor systems with Datadog, Grafana, and Prometheus; automate tasks with Shell and Python.
+
+DevOps Engineer
+Inventurs Cube LLB, Indore
+April 2025 – June 2025
+- Helped set up CI/CD pipelines using Jenkins and GitHub Actions.
+- Automated infrastructure with Bash, Python, Terraform, and Ansible.
+- Worked with AWS EC2, S3, and IAM; monitored with Prometheus, Grafana, and CloudWatch Logs.
+- Configured Docker and Kubernetes fundamentals; applied IAM policies and security groups.
+- Configured DNS and subdomains on Cloudflare, hosted sites on Hostinger, and deployed apps on AWS EC2 from GitHub.
+
+DevOps Intern Trainee
+HisanLabs, Pune
+July 2024 – March 2025
+- Built Jenkins CI/CD pipelines for build, test, and deployment.
+- Deployed AWS infrastructure with Terraform reusable modules; containerized apps with Docker and Kubernetes.
+- Wrote Kubernetes manifests and Helm charts; used Git and GitHub for branching, pull requests, and conflict resolution.
+- Used AWS EC2, IAM, S3, RDS, Lambda, CloudWatch, Route53, SQS, SNS, and KMS.
+- Automated operations with Shell; monitored with Datadog and CloudWatch; supported disaster recovery.
+
+EDUCATION
+Master of Computer Application, RGPV Bhopal, Madhya Pradesh, 2023 – 2025
+Bachelor of Computer Application, Barkatullah University Bhopal, Madhya Pradesh, 2016 – 2019
+
+CERTIFICATIONS
+DevOps Engineer Foundation Course, Skilling Academy, January 2025

@@ -1,0 +1,4 @@
+git clone https://github.com/<USERNAME>/<REPO>.git
+cd <REPO>
+python -m pip install -r requirements.txt
+python -m streamlit run app.py

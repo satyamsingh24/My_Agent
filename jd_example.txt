@@ -1,0 +1,8 @@
+Job Title: DevOps Engineer
+Company: Example Corp
+
+Requirements:
+- AWS, Terraform, Docker, Kubernetes
+- Jenkins or GitHub Actions
+- Linux, Git, CI/CD
+- Monitoring with Prometheus or CloudWatch

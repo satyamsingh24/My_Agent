@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>My_AGENT — ATS CV Builder</title>
+  <style>
+    :root {
+      --bg: #141726;
+      --card: #1c2033;
+      --text: #dfe3f2;
+      --muted: #9298b4;
+      --accent: #6c6fbf;
+      --accent2: #5a7fb8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(900px 420px at 12% -10%, #4b4a8f33, transparent),
+        radial-gradient(800px 380px at 90% 0%, #3f5a8f33, transparent),
+        var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+    .card {
+      max-width: 640px;
+      width: 100%;
+      background: var(--card);
+      border: 1px solid #2f3550;
+      border-radius: 20px;
+      padding: 2.2rem 1.8rem;
+      box-shadow: 0 16px 36px rgba(8, 10, 20, .35);
+      text-align: center;
+    }
+    h1 { margin: 0 0 .4rem; font-size: 2rem; }
+    .by {
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-size: .8rem;
+      margin-bottom: 1.2rem;
+    }
+    p { color: var(--muted); line-height: 1.55; }
+    code {
+      display: block;
+      text-align: left;
+      background: #141726;
+      border: 1px solid #2f3550;
+      border-radius: 12px;
+      padding: 1rem;
+      color: #e8ecff;
+      overflow-x: auto;
+      font-size: .9rem;
+      margin: 1rem 0 1.3rem;
+    }
+    a.btn {
+      display: inline-block;
+      padding: .85rem 1.2rem;
+      border-radius: 12px;
+      text-decoration: none;
+      color: #fff;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>My_AGENT</h1>
+    <div class="by">Created by Satyam Singh Bhadoriya</div>
+    <p>
+      Browser-based ATS CV builder. GitHub Pages hosts this project page only —
+      run the Python app locally after cloning.
+    </p>
+    <code>git clone https://github.com/satyamsingh24/My_Agent.git
+cd My_Agent
+python -m pip install -r requirements.txt
+python -m streamlit run app.py</code>
+    <p>App opens at <strong>http://localhost:6932</strong>. PIN: <strong>6932</strong>.</p>
+    <a class="btn" href="https://github.com/satyamsingh24/My_Agent">View source on GitHub</a>
+  </main>
+</body>
+</html>
