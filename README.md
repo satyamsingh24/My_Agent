@@ -62,8 +62,8 @@ Pehle [Python 3.10+](https://www.python.org/downloads/) install karo. Windows pa
 **Windows (PowerShell / CMD):**
 
 ```powershell
-git clone https://github.com/<USERNAME>/<REPO>.git
-cd <REPO>
+git clone https://github.com/satyamsingh24/My_Agent.git
+cd My_Agent
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
@@ -73,8 +73,8 @@ Ya clone ke baad `RUN_MY_AGENT.bat` par double-click — yeh packages install ka
 **Linux / macOS:**
 
 ```bash
-git clone https://github.com/<USERNAME>/<REPO>.git
-cd <REPO>
+git clone https://github.com/satyamsingh24/My_Agent.git
+cd My_Agent
 python3 -m pip install -r requirements.txt
 python3 -m streamlit run app.py
 ```

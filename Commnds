@@ -1,4 +1,4 @@
-git clone https://github.com/<USERNAME>/<REPO>.git
-cd <REPO>
+git clone https://github.com/satyamsingh24/My_Agent.git
+cd My_Agent
 python -m pip install -r requirements.txt
 python -m streamlit run app.py
