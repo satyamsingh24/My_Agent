@@ -23,6 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # The in-browser app fetches these at runtime, so ship them with the page.
+      - name: Copy app files into the published folder
+        run: |
+          mkdir -p docs/assets docs/profile
+          cp app.py cv_engine.py docs/
+          cp assets/owner_photo.jpg docs/assets/
+          cp profile/Satyam_Dev_Resume_ATS.pdf docs/profile/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs

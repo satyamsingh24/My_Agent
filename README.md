@@ -95,20 +95,27 @@ Linux/macOS par activate: `source .venv/bin/activate`
 Download file names random hote hain: `My_Agent_12345.pdf`, `.docx`, `.xlsx`
 (ek generation ke teeno format same number use karte hain).
 
-## Online par app chalana (bina code download kiye)
+## Online demo (bina code download kiye)
 
-GitHub Pages sirf static page host karta hai, Streamlit app nahi. App ko browser
-par live karne ke liye **Streamlit Community Cloud** (free) use karo:
+Live app: **https://satyamsingh24.github.io/My_Agent/**
+
+Yeh page [stlite](https://github.com/whitphx/stlite) use karta hai, jo Streamlit
+ko WebAssembly (Pyodide) par visitor ke **browser ke andar** chalata hai. Koi
+server nahi, koi install nahi — link kholo aur PIN `6932` daal kar poora
+frontend use karo.
+
+Dhyan rahe: pehli baar Python runtime download hota hai, isliye load hone mein
+30-60 second lag sakte hain aur app local run se thodi slow chalti hai. Roz ke
+use ke liye local run (upar wale commands) hi best hai.
+
+Zyada tez hosted version chahiye to **Streamlit Community Cloud** (free) use karo:
 
 1. [share.streamlit.io](https://share.streamlit.io) kholo aur GitHub se sign in karo.
 2. **Create app** → **Deploy a public app from GitHub** choose karo.
 3. Repository: `satyamsingh24/My_Agent`, Branch: `main`, Main file: `app.py`.
 4. **Deploy** dabao. Pehli build mein 2-3 minute lagte hain.
 
-Live URL milegi jaise `https://my-agent.streamlit.app` — koi bhi user usse
-frontend check kar sakta hai, kuch download karne ki zaroorat nahi.
-
-Hosted mode mein app khud detect kar leti hai ki woh server par chal rahi hai:
+Hosted mode mein app khud detect kar leti hai ki woh server/browser par chal rahi hai:
 
 - Uploaded CV sirf us visitor ke **browser session** mein rehta hai, server ki
   disk par save nahi hota, aur doosre visitors ko dikhta nahi.

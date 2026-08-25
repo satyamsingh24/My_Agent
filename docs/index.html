@@ -2,103 +2,105 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
   <title>My_AGENT - ATS CV Builder</title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.css"
+  />
   <style>
-    :root {
-      --bg: #141726;
-      --card: #1c2033;
-      --text: #dfe3f2;
-      --muted: #9298b4;
-      --accent: #6c6fbf;
-      --accent2: #5a7fb8;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      min-height: 100vh;
+    html, body { margin: 0; padding: 0; background: #141726; }
+    #boot {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: .9rem;
       font-family: Arial, Helvetica, sans-serif;
-      color: var(--text);
+      color: #dfe3f2;
       background:
         radial-gradient(900px 420px at 12% -10%, #4b4a8f33, transparent),
         radial-gradient(800px 380px at 90% 0%, #3f5a8f33, transparent),
-        var(--bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem 1rem;
-    }
-    .card {
-      max-width: 660px;
-      width: 100%;
-      background: var(--card);
-      border: 1px solid #2f3550;
-      border-radius: 20px;
-      padding: 2.2rem 1.8rem;
-      box-shadow: 0 16px 36px rgba(8, 10, 20, .35);
+        #141726;
       text-align: center;
+      padding: 1.5rem;
+      z-index: 9;
     }
-    h1 { margin: 0 0 .4rem; font-size: 2rem; }
-    .by {
-      letter-spacing: .12em;
+    #boot h1 { margin: 0; font-size: 2rem; }
+    #boot .by {
+      font-size: .74rem;
+      letter-spacing: .14em;
       text-transform: uppercase;
-      color: var(--muted);
-      font-size: .8rem;
-      margin-bottom: 1.2rem;
+      color: #9298b4;
     }
-    p { color: var(--muted); line-height: 1.55; }
-    ul {
-      text-align: left;
-      color: var(--muted);
-      line-height: 1.6;
-      font-size: .93rem;
-      margin: 0 0 1.2rem;
-      padding-left: 1.2rem;
+    #boot p { color: #9298b4; max-width: 420px; line-height: 1.55; margin: 0; }
+    #boot .bar {
+      width: 220px;
+      height: 6px;
+      border-radius: 999px;
+      background: #22273d;
+      overflow: hidden;
     }
-    code {
+    #boot .bar span {
       display: block;
-      text-align: left;
-      background: #141726;
-      border: 1px solid #2f3550;
-      border-radius: 12px;
-      padding: 1rem;
-      color: #e8ecff;
-      overflow-x: auto;
-      font-size: .9rem;
-      margin: 1rem 0 1.3rem;
-      white-space: pre;
+      width: 40%;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #6c6fbf, #5a7fb8);
+      animation: slide 1.3s ease-in-out infinite;
     }
-    a.btn {
-      display: inline-block;
-      padding: .85rem 1.2rem;
-      border-radius: 12px;
-      text-decoration: none;
-      color: #fff;
-      font-weight: 700;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
+    @keyframes slide {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
     }
   </style>
 </head>
 <body>
-  <main class="card">
+  <div id="boot">
     <h1>My_AGENT</h1>
     <div class="by">Created by Satyam Singh Bhadoriya</div>
+    <div class="bar"><span></span></div>
     <p>
-      An ATS CV builder that runs in your browser from your own computer.
-      This is the project page only; the app itself runs locally.
+      Starting the app inside your browser. The first load downloads Python,
+      so it can take up to a minute. PIN: <strong>6932</strong>
     </p>
-    <ul>
-      <li>Upload a CV, paste a job description, generate an ATS-friendly CV</li>
-      <li>Build a CV from scratch, with an optional profile photo</li>
-      <li>Generate a short cold email for HR referrals from any CV</li>
-      <li>Download as PDF, DOCX, or XLSX</li>
-    </ul>
-    <code>git clone https://github.com/satyamsingh24/My_Agent.git
-cd My_Agent
-python -m pip install -r requirements.txt
-python -m streamlit run app.py</code>
-    <p>App opens at <strong>http://localhost:6932</strong> &middot; PIN: <strong>6932</strong></p>
-    <a class="btn" href="https://github.com/satyamsingh24/My_Agent">View source on GitHub</a>
-  </main>
+  </div>
+  <div id="root"></div>
+  <script type="module">
+    import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@0.85.1/build/stlite.js";
+
+    mount(
+      {
+        requirements: ["pypdf", "reportlab", "python-docx", "openpyxl", "pillow"],
+        entrypoint: "app.py",
+        files: {
+          "app.py": { url: "./app.py" },
+          "cv_engine.py": { url: "./cv_engine.py" },
+          "assets/owner_photo.jpg": { url: "./assets/owner_photo.jpg" },
+          "profile/Satyam_Dev_Resume_ATS.pdf": {
+            url: "./profile/Satyam_Dev_Resume_ATS.pdf",
+          },
+        },
+        streamlitConfig: {
+          "theme.base": "dark",
+          "client.toolbarMode": "viewer",
+          "browser.gatherUsageStats": false,
+        },
+      },
+      document.getElementById("root"),
+    );
+
+    const boot = document.getElementById("boot");
+    const root = document.getElementById("root");
+    const observer = new MutationObserver(() => {
+      if (root.querySelector('[data-testid="stApp"], .stApp')) {
+        boot.style.display = "none";
+        observer.disconnect();
+      }
+    });
+    observer.observe(root, { childList: true, subtree: true });
+  </script>
 </body>
 </html>
