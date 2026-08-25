@@ -177,6 +177,61 @@ def paint(theme_name: str) -> None:
             border-radius: 18px; padding: 1.35rem 1.25rem 1.1rem;
             margin: .55rem 0 .3rem; box-shadow: {t["shadow"]};
             position: relative; overflow: hidden; transition: .2s ease;
+            cursor: pointer;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button {{
+            display: flex; flex-direction: column; align-items: flex-start;
+            justify-content: flex-start; gap: .1rem; text-align: left;
+            white-space: normal; min-height: 13.5rem;
+            padding: 1.35rem 1.25rem 1.1rem; border-radius: 18px;
+            background: {t["panel"]}; color: {t["text"]};
+            border: 1.5px solid {t["border"]}; box-shadow: {t["shadow"]};
+            position: relative; overflow: hidden;
+            animation: agentFadeUp .5s ease both;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button::before {{
+            content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
+            background: linear-gradient(90deg, {t["accent"]}, {t["accent2"]});
+            transform-origin: left center;
+            animation: agentBarGrow .7s ease both;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button:hover {{
+            background: {t["panel"]} !important;
+            border-color: {t["accent"]}; transform: translateY(-3px);
+            box-shadow: 0 12px 24px {t["accent"]}2e;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button p {{
+            color: {t["text"]} !important; margin: 0;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button:hover p {{
+            color: {t["text"]} !important;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button p:first-child:not(:last-child) {{
+            width: 3rem; height: 3rem; border-radius: 14px; font-size: 1.4rem;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(135deg, {t["accent"]}, {t["accent2"]});
+            color: #fff !important; margin-bottom: .7rem;
+            transition: transform .25s ease;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button:hover p:first-child:not(:last-child) {{
+            transform: translateY(-2px) scale(1.06);
+            color: #fff !important;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button p:nth-child(2) {{
+            font-size: 1.12rem; font-weight: 750; margin-bottom: .3rem;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button p:nth-child(3) {{
+            font-size: .9rem; font-weight: 500; line-height: 1.5;
+            color: {t["muted"]} !important;
+        }}
+        [class*="st-key-home_card_"] div.stButton > button:hover p:nth-child(3) {{
+            color: {t["muted"]} !important;
+        }}
+        .st-key-home_card_existing div.stButton > button {{
+            animation-delay: .09s;
+        }}
+        .st-key-home_card_make div.stButton > button {{
+            animation-delay: .18s;
         }}
         .option-card::before {{
             content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
@@ -225,6 +280,28 @@ def paint(theme_name: str) -> None:
         }}
         section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {{
             padding-top: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            min-height: calc(100vh - 1.2rem);
+        }}
+        .st-key-side_help {{
+            margin-top: auto;
+            padding-bottom: .45rem;
+        }}
+        .side-desc {{
+            margin: .55rem .1rem 0;
+            font-size: .78rem;
+            line-height: 1.5;
+            color: {t["muted"]};
+            text-align: left;
+        }}
+        .side-desc strong {{
+            display: block;
+            margin-bottom: .28rem;
+            font-size: .8rem;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+            color: {t["text"]};
         }}
         .side-brand {{
             padding: .9rem .25rem 1.1rem; text-align: center;
@@ -508,6 +585,40 @@ def exit_button(key: str) -> None:
         go("home")
 
 
+@st.dialog("How to use My_AGENT")
+def help_dialog() -> None:
+    st.markdown(
+        """
+**Description**
+
+Use this application to rebuild your CV in a more selective way for any
+company’s job description (JD). It makes the CV ATS-friendly and ready
+according to that JD, so when you apply, the company’s AI screening can
+give your CV higher priority and your chance of being shortlisted increases.
+
+My_AGENT also helps you write a short HR referral email. It does **not**
+apply to jobs or log in to any job portal.
+
+**Home page**
+1. **Upload CV** — save a PDF CV so the app can use your details.
+2. **Existing CV** — continue with the saved CV, paste a job description, then generate a matching ATS CV.
+3. **Make your CV** — fill the form (photo is optional) and build a new ATS CV from only what you type.
+
+**After you generate a CV**
+Choose **PDF**, **DOCX**, or **XLSX**. Use PDF or DOCX when you apply. XLSX is only a reference copy.
+
+**Left panel**
+- **My Profile** — creator details and a reference CV download.
+- **Cold Mail for Referral** — upload a CV and get a short email for HR (fresher / intern / experienced, based on that CV).
+- **Settings** — log out and return to the PIN screen.
+
+Read this once, then start from **Upload CV** or **Make your CV**.
+        """
+    )
+    if st.button("Got it", type="primary", use_container_width=True):
+        st.rerun()
+
+
 @st.dialog("Enter PIN to continue")
 def pin_dialog() -> None:
     st.write("My_AGENT is locked. Enter your PIN to continue.")
@@ -638,6 +749,22 @@ with st.sidebar:
     if st.button("⚙  Settings", use_container_width=True, key="side_settings"):
         clear_cv_session()
         go("settings")
+    with st.container(key="side_help"):
+        if st.button("❓  How to use", use_container_width=True, key="side_howto"):
+            help_dialog()
+        st.markdown(
+            """
+            <div class="side-desc">
+              <strong>Description</strong>
+              Use this application to rebuild your CV in a more selective way
+              for any company’s job description (JD). The CV is made
+              ATS-friendly and aligned with that JD, so when you apply, the
+              company’s AI screening can give your CV higher priority and your
+              chance of being shortlisted increases.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 is_dark = st.session_state["theme"] == "Dark"
 spacer, toggle_col = st.columns([8, 1])
@@ -682,41 +809,39 @@ if screen == "home":
     )
     left, right, third = st.columns(3)
     with left:
-        st.markdown(
-            '<div class="option-card d1"><div class="ic">⬆</div>'
-            "<h4>1. Upload CV</h4>"
-            f"<p>{upload_note}</p>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        if st.button("⬆  Upload CV", type="primary", key="home_upload"):
-            clear_cv_session()
-            go("upload")
+        with st.container(key="home_card_upload"):
+            if st.button(
+                f"⬆\n\n1. Upload CV\n\n{upload_note}",
+                key="home_upload",
+                use_container_width=True,
+            ):
+                clear_cv_session()
+                go("upload")
     with right:
         saved_name = (
             existing[0].get("original_name", "CV.pdf")
             if existing
             else "No CV saved yet"
         )
-        st.markdown(
-            f'<div class="option-card d2"><div class="ic">📁</div>'
-            f"<h4>2. Existing CV</h4><p>{saved_name}</p></div>",
-            unsafe_allow_html=True,
-        )
-        if st.button("📁  Existing CV", type="primary", key="home_existing"):
-            clear_cv_session()
-            go("existing")
+        with st.container(key="home_card_existing"):
+            if st.button(
+                f"📁\n\n2. Existing CV\n\nSaved: {saved_name}",
+                key="home_existing",
+                use_container_width=True,
+            ):
+                clear_cv_session()
+                go("existing")
     with third:
-        st.markdown(
-            '<div class="option-card d3"><div class="ic">✍</div>'
-            "<h4>3. Make your CV</h4>"
-            "<p>Fill in your details and build a new ATS CV.</p></div>",
-            unsafe_allow_html=True,
-        )
-        if st.button("✍  Make your CV", type="primary", key="home_make"):
-            clear_cv_session()
-            st.session_state.pop("manual_generated", None)
-            go("make")
+        with st.container(key="home_card_make"):
+            if st.button(
+                "✍\n\n3. Make your CV\n\n"
+                "Fill in your details and build a new ATS CV.",
+                key="home_make",
+                use_container_width=True,
+            ):
+                clear_cv_session()
+                st.session_state.pop("manual_generated", None)
+                go("make")
 
 elif screen == "upload":
     step(1, "Upload your CV")
