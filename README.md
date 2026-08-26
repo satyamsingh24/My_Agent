@@ -1,132 +1,80 @@
 # My_AGENT — ATS CV Builder
 
-Standalone browser application — sirf Python chahiye, koi extra tool nahi.
+A standalone Streamlit app for building ATS-friendly CVs. Python is enough to run it locally; no extra desktop tools are required.
 
 ## Access
 
-App khulte hi PIN popup aata hai. PIN: **6932** (hardcoded in `app.py` as `APP_PIN`).
+The app opens on a lock screen. Tap **Locked — tap unlock and enter your PIN**, then enter the PIN in the sheet that slides up from the bottom. The PIN is set in `app.py` and is not listed here.
 
 ## Features
 
-0. **Dark / Light mode** toggle top-right, aur har screen par **Exit to Front Page** button.
-1. **Upload CV** — koi bhi selectable-text PDF upload karo (DevOps, Python, Java, etc.).
-2. CV text local files mein save hota hai.
-3. **Existing CV** — saved CV continue/change karo aur Upload CV wala complete
-   JD + ATS score + AI/fallback + truthful rebuild workflow use karo.
-4. Complete JD paste karo.
-5. App CV aur JD mein common verified skills detect karti hai.
-6. Attractive ATS-safe one-column layout: readable Arial/Helvetica fonts, blue
-   section headings, clean spacing, no columns/icons/tables.
-7. Download popup se **PDF**, **DOCX**, ya **XLSX** choose karo.
-8. **Make your CV** — bina purana CV ke form se naya CV banao, target JD paste
-   karo, aur wahi complete ATS score + AI/fallback + truthful confirmation
-   workflow use karo. Output PDF, DOCX aur XLSX mein milta hai.
-9. Reference resume sirf **layout aur heading order** ke liye use hota hai —
-   content sirf tumhari di hui details ka rehta hai, kisi doosre CV se nahi.
-10. Kam details do to bhi CV professional banta hai: role + skills se
-    professional summary, grouped SKILLS (Cloud / DevOps / Databases...) aur
-    CORE COMPETENCIES bullets tumhare hi keywords se bante hain.
-11. Form ki details badalne par warning aati hai — dobara **Make CV** dabana
-    zaroori hai, warna purana CV dikhta rahega.
-12. Front page par professional animated background chalta hai (moving gradient
-    glow + slow grid + hero sheen) — pure CSS, koi internet ya extra file nahi.
-    Apni image chahiye to `assets/background.jpg` (ya `.png` / `.webp`) rakh do;
-    app usko dim + slow-zoom karke backdrop bana degi. File hatane par CSS
-    animation wapas.
-13. Sidebar ke top par **My Profile** page hai: owner ki passport-size photo
-    (`assets/owner_photo.jpg`) aur basic details code ke saath ship hoti hain,
-    aur **My CV for Reference** button reference resume download karta hai.
-14. Left sidebar mein **Cold Mail for Referral** CV ko read karke short HR email
-    banata hai. Fresher, internship-only aur experienced profiles ke liye alag
-    truthful wording use hoti hai; CV ke bahar ki skill/experience add nahi hoti.
-15. Sidebar ke **Settings** page par Log out button session lock karke PIN screen
-    par wapas le jaata hai.
-16. Top-right **AI** button password `6932AI` se provider settings kholta hai.
-    Ollama local-first hai; failure par configured Gemini aur Groq free-tier
-    providers try ho sakte hain. Cloud API keys sirf current session memory mein
-    rehti hain aur logout par clear ho jaati hain.
-17. **Templates → Edit Your CV** ek browser-only freeform editor kholta hai.
-    Selectable-text PDF import karke text boxes move/resize/rotate/edit karo,
-    fonts, colours, shapes, lines aur images use karo, 10 template previews mein
-    se koi design apply karo, undo/redo chalao aur PDF ya DOCX export karo.
+0. **Dark / Light mode** toggle in the top-right, and an **Exit to Front Page** button on every screen.
+1. **Upload CV** — upload any selectable-text PDF (DevOps, Python, Java, and similar roles).
+2. CV text is stored in local files on a local run.
+3. **Existing CV** — continue or replace the saved CV, then use the full job-description, ATS score, AI/fallback, and truthful rebuild workflow.
+4. Paste a complete job description.
+5. The app detects skills that appear in both the CV and the job description.
+6. Attractive ATS-safe one-column layout: readable Arial/Helvetica fonts, blue section headings, clean spacing, no columns, icons, or tables.
+7. Choose **PDF**, **DOCX**, or **XLSX** from the download popup.
+8. **Make your CV** — build a new CV from a form without an existing file, paste a target job description, and use the same ATS score, AI/fallback, and confirmation workflow. Output is available as PDF, DOCX, and XLSX.
+9. The reference resume is used only for **layout and heading order**. Content comes only from the details you provide, not from another person's CV.
+10. Even with few details, the CV still reads professionally: the role and skills produce a summary, grouped SKILLS lines (Cloud / DevOps / Databases, and similar), and CORE COMPETENCIES bullets built from your own keywords.
+11. Changing form details shows a warning — press **Make CV** again, otherwise the previous CV stays on screen.
+12. The front page uses a professional animated background (moving gradient glow, a slow grid, and a hero sheen) in pure CSS, with no internet or extra files. To use your own image, put `assets/background.jpg` (or `.png` / `.webp`) in the project; the app dims it and slow-zooms it as a backdrop. Remove the file to return to the CSS animation.
+13. The sidebar **My Profile** page ships the owner's passport-size photo (`assets/owner_photo.jpg`) and basic details in the code, and **My CV for Reference** downloads the reference resume.
+14. **Cold Mail for Referral** in the left sidebar reads a CV and writes a short HR email. Fresher, internship-only, and experienced profiles get different truthful wording. Skills or experience that are not in the CV are not added.
+15. **Settings** in the sidebar logs out, locks the session, and returns to the PIN screen.
+16. The top-right **AI** button opens provider settings behind a separate password (also set in `app.py`, not listed here). Ollama is local-first. If it fails, configured Gemini and Groq free-tier providers can be tried. Cloud API keys stay only in current session memory and are cleared on logout.
+17. **Templates → Edit Your CV** opens a browser-only freeform editor. Import a selectable-text PDF, then move, resize, rotate, and edit text boxes. Use fonts, colours, shapes, lines, and images, apply any of the 10 template previews, undo/redo, and export as PDF or DOCX.
 
-Har generated CV `profile/Satyam_Dev_Resume_ATS.pdf` ke reference layout ko follow
-karta hai: Name → Role → Contact → SUMMARY → SKILLS → JD-MATCHED SKILLS →
-PROFESSIONAL EXPERIENCE → INTERNSHIPS → PROJECTS → EDUCATION → CERTIFICATIONS.
-Declaration/References jaise ATS-noise blocks hata diye jaate hain.
+Every generated CV follows the layout of `profile/Satyam_Dev_Resume_ATS.pdf`: Name → Role → Contact → SUMMARY → SKILLS → PROFESSIONAL EXPERIENCE → INTERNSHIPS → PROJECTS → EDUCATION → CERTIFICATIONS. Declaration and References blocks are dropped because they do not help ATS parsers.
 
-PDF aur DOCX ATS-friendly hain. XLSX sirf reference/editing ke liye hai; Excel
-CV job portal par upload karna recommended nahi hai.
+PDF and DOCX are ATS-friendly. XLSX is only a reference or editing copy; do not upload an Excel CV to a job portal.
 
-Skill matching DevOps/cloud ke saath Java full stack, Python, frontend,
-backend, mobile, data/AI, testing aur security technologies cover karti hai.
+Skill matching covers DevOps and cloud as well as Java full stack, Python, frontend, backend, mobile, data/AI, testing, and security technologies.
 
-App skills ya experience invent nahi karti. JD mein jo requirement hai lekin uploaded
-CV mein verify nahi hoti, woh missing list mein dikhayi jaati hai.
+The app does not invent skills or experience. A requirement that appears in the job description but is not verified in the uploaded CV is listed as missing.
 
 ## Free AI providers
 
-Upload CV flow deterministic ATS checks ke baad optional AI wording suggestions
-use karta hai. Default provider chain:
+The Upload CV flow runs deterministic ATS checks first, then optional AI wording suggestions. The default provider chain is:
 
-1. **Ollama** — free/local, CV computer se bahar nahi jaata.
-2. **Gemini** — free tier; API key AI settings dialog mein enter karo.
-3. **Groq** — free tier; API key AI settings dialog mein enter karo.
+1. **Ollama** — free and local; the CV does not leave this computer.
+2. **Gemini** — free tier; enter the API key in the AI settings dialog.
+3. **Groq** — free tier; enter the API key in the AI settings dialog.
 
-Ollama ke liye [Ollama](https://ollama.com/) install karke model pull aur server
-start karo:
+For Ollama, install [Ollama](https://ollama.com/), pull a model, and start the server:
 
 ```powershell
 ollama pull llama3.2:3b
 ollama serve
 ```
 
-Provider settings ka password: **6932AI**. Yeh password public source code mein
-hardcoded hai, isliye real security boundary nahi hai. Gemini/Groq select ya
-fallback hone par uploaded CV aur JD us cloud provider ko bheje jaate hain.
-Missing JD skills AI khud add nahi karti; user ko pehle unhe truthful confirmation
-list mein tick karna padta hai.
+The AI settings password is hardcoded in the public source, so it is not a real security boundary. If Gemini or Groq is selected or used as a fallback, the uploaded CV and job description are sent to that cloud provider. The AI does not add missing job-description skills on its own; you must tick them in the truthful confirmation list first.
 
 ## Freeform CV editor
 
-Home page par **4. Templates** kholo:
+Open **4. Templates** on the home page:
 
-1. **Existing Templates** structured, JD-aligned aur ATS-safe CV flow kholta hai.
-2. **Edit Your CV** visual editor kholta hai. **Import PDF** se selectable-text
-   CV do; phir labelled toolbar ke text, insert, arrange, history, zoom aur page
-   tools use karo aur **Export** se format chuno.
+1. **Existing Templates** starts the structured, job-description-aligned, ATS-safe CV flow.
+2. **Edit Your CV** opens the visual editor. Use **Import PDF** for a selectable-text CV, then use the labelled toolbar for text, insert, arrange, history, zoom, and page tools, and choose a format under **Export**.
 
-Left panel har template ka actual page preview image dikhata hai; kisi preview par
-click karne par imported CV ki information usi design mein editable objects ke roop
-mein rebuild ho jaati hai. Template switch sirf layout/style badalta hai; app nayi
-skill ya experience invent nahi karti. Preview images `static/editor/previews/`
-mein hain aur `CV_TEMPLATES` badalne ke baad
-`python -m scripts.export_template_previews` se regenerate hoti hain.
+The left panel shows a real page preview for each template. Clicking a preview rebuilds the imported CV as editable objects in that design. Switching templates changes only layout and style; the app does not invent skills or experience. Preview images live in `static/editor/previews/` and can be regenerated with `python -m scripts.export_template_previews` after `CV_TEMPLATES` changes.
 
-Editor ke header mein apna dark/light switch hai. Pehli baar app se editor kholne
-par wahi theme use hoti hai jo app par selected hai; editor mein switch dabate hi
-choice browser ke localStorage mein save ho jaati hai. CV page hamesha white rehta
-hai kyunki wahi print/export hota hai.
+The editor header has its own dark/light switch. The first time you open the editor from the app, it uses the app's current theme; after you switch inside the editor, the choice is saved in the browser's localStorage. The CV page itself stays white because that is what is printed and exported.
 
-**Export** dialog do formats deta hai:
+The **Export** dialog offers two formats:
 
-- **PDF** har page ki exact visual copy deta hai.
-- **DOCX (Word)** canvas ke text ko single-column Word file mein likhta hai, jise
-  ATS aasani se parse karta hai; freeform positioning is file mein nahi rehti.
+- **PDF** is an exact visual copy of each page.
+- **DOCX (Word)** writes the canvas text into a single-column Word file that ATS parsers can read; freeform positioning is not kept in that file.
 
-CV/PDF browser ke andar process hota hai aur server par upload nahi hota. Scanned
-image-only PDFs mein selectable text nahi hota, isliye unhe editor import nahi
-kar sakta. Mobile par basic touch editing supported hai, lekin detailed layout
-editing desktop/laptop par easier hai. Editor ki pinned browser libraries load
-karne ke liye internet connection chahiye.
+The CV/PDF is processed inside the browser and is not uploaded to a server. Scanned image-only PDFs have no selectable text, so the editor cannot import them. Basic touch editing works on mobile, but detailed layout work is easier on a desktop or laptop. The editor needs an internet connection to load its pinned browser libraries.
 
-Freeform columns, icons aur decorative elements ATS parsing ko weak kar sakte
-hain. MNC/job-portal application ke liye simple one-column result rakho; maximum
-ATS safety ke liye **Existing Templates** wala structured flow use karo.
+Freeform columns, icons, and decorative elements can weaken ATS parsing. Keep a simple one-column result for MNC or job-portal applications. For maximum ATS safety, use the structured **Existing Templates** flow.
 
-## GitHub se clone karke run
+## Clone from GitHub and run
 
-Pehle [Python 3.10+](https://www.python.org/downloads/) install karo. Windows par installer mein **Add Python to PATH** tick karo. Git bhi chahiye.
+Install [Python 3.10+](https://www.python.org/downloads/) first. On Windows, tick **Add Python to PATH** in the installer. Git is also required.
 
 **Windows (PowerShell / CMD):**
 
@@ -137,7 +85,7 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Ya clone ke baad `RUN_MY_AGENT.bat` par double-click — yeh packages install karke app start kar dega.
+After cloning, you can also double-click `RUN_MY_AGENT.bat` — it installs packages and starts the app.
 
 **Linux / macOS:**
 
@@ -148,9 +96,9 @@ python3 -m pip install -r requirements.txt
 python3 -m streamlit run app.py
 ```
 
-Terminal mein URL dikhega, jaise `http://localhost:6932` — browser mein wahi kholo. PIN: **6932**. Band karne ke liye terminal mein `Ctrl+C`.
+The terminal prints a Local URL — open that in a browser. Unlock the lock screen with the app PIN. Stop the app with `Ctrl+C` in the terminal.
 
-Optional (recommended): clone ke baad virtual environment banao, taaki packages system Python ko na chhedein:
+Optional (recommended): create a virtual environment after cloning so packages do not touch system Python:
 
 ```powershell
 python -m venv .venv
@@ -159,57 +107,42 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Linux/macOS par activate: `source .venv/bin/activate`
+On Linux/macOS, activate with `source .venv/bin/activate`.
 
-Download file names random hote hain: `My_Agent_12345.pdf`, `.docx`, `.xlsx`
-(ek generation ke teeno format same number use karte hain).
+Download file names are random: `My_Agent_12345.pdf`, `.docx`, `.xlsx` (all three formats from one generation share the same number).
 
-## Online demo (bina code download kiye)
+## Online demo (no code download)
 
 Live app: **https://satyamsingh24.github.io/My_Agent/**
 
-Yeh page [stlite](https://github.com/whitphx/stlite) use karta hai, jo Streamlit
-ko WebAssembly (Pyodide) par visitor ke **browser ke andar** chalata hai. Koi
-server nahi, koi install nahi — link kholo aur PIN `6932` daal kar poora
-frontend use karo.
+This page uses [stlite](https://github.com/whitphx/stlite) to run Streamlit on WebAssembly (Pyodide) **inside the visitor's browser**. There is no server and no install — open the link and unlock the lock screen to use the full frontend.
 
-Dhyan rahe: pehli baar Python runtime download hota hai, isliye load hone mein
-30-60 second lag sakte hain aur app local run se thodi slow chalti hai. Roz ke
-use ke liye local run (upar wale commands) hi best hai.
+The first load downloads the Python runtime, so it can take 30–60 seconds and the app is a little slower than a local run. For daily use, the local commands above are still best.
 
-Zyada tez hosted version chahiye to **Streamlit Community Cloud** (free) use karo:
+For a faster hosted version, use **Streamlit Community Cloud** (free):
 
-1. [share.streamlit.io](https://share.streamlit.io) kholo aur GitHub se sign in karo.
-2. **Create app** → **Deploy a public app from GitHub** choose karo.
+1. Open [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+2. Choose **Create app** → **Deploy a public app from GitHub**.
 3. Repository: `satyamsingh24/My_Agent`, Branch: `main`, Main file: `app.py`.
-4. **Deploy** dabao. Pehli build mein 2-3 minute lagte hain.
+4. Press **Deploy**. The first build takes 2–3 minutes.
 
-Hosted mode mein app khud detect kar leti hai ki woh server/browser par chal rahi hai:
+In hosted mode the app detects that it is running on a server or in the browser:
 
-- Uploaded CV sirf us visitor ke **browser session** mein rehta hai, server ki
-  disk par save nahi hota, aur doosre visitors ko dikhta nahi.
-- Generated PDF/DOCX/XLSX sirf download button se milte hain; server par file
-  copy nahi banti.
-- PIN (`6932`) public repo mein hai, isliye hosted app ko private samajhna galat
-  hoga — demo ke liye theek hai.
+- An uploaded CV stays in that visitor's **browser session**, is not saved on the server disk, and is not visible to other visitors.
+- Generated PDF/DOCX/XLSX files are available only from the download buttons; no copy is written on the server.
+- The lock PIN lives in the public repository, so a hosted app should not be treated as private. It is fine as a demo.
 
-## Files kahan save hoti hain (local run)
+## Where files are saved (local run)
 
 - Existing uploaded CV: `app_data/existing_cv.pdf`
 - Extracted information: `app_data/existing_cv.txt`
 - CV metadata: `app_data/existing_cv.json`
 - Generated CV: `applications/generated/`
 
-## Dusre laptop par
+## On another laptop
 
-Poora `My_Agent` folder USB, ZIP, ya Drive se copy karo. Python install karo aur
-`RUN_MY_AGENT.bat` double-click karo. Iske alawa kuch install karne ki zaroorat
-nahi hai.
+Copy the whole `My_Agent` folder by USB, ZIP, or Drive. Install Python and double-click `RUN_MY_AGENT.bat`. Nothing else needs to be installed.
 
 ## Important limitation
 
-Ollama sirf local Streamlit run par `localhost:11434` se accessible hota hai.
-Streamlit Cloud par Gemini/Groq configure karo. GitHub Pages ka stlite/browser
-build browser networking aur CORS restrictions ki wajah se local Ollama access
-reliably nahi kar sakta. AI unavailable ho tab bhi deterministic ATS matching aur
-DOCX generation chalti rehti hai.
+Ollama is only reachable at `localhost:11434` during a local Streamlit run. On Streamlit Cloud, configure Gemini or Groq. The GitHub Pages stlite/browser build cannot reliably reach local Ollama because of browser networking and CORS. Deterministic ATS matching and DOCX generation still work when AI is unavailable.
