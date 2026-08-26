@@ -7,7 +7,17 @@ from pathlib import Path
 
 import streamlit as st
 
+from ai_providers import (
+    PROVIDER_LABELS,
+    apply_ai_response,
+    provider_settings,
+    run_ai_analysis,
+    test_provider,
+)
 from cv_engine import (
+    CV_TEMPLATES,
+    ats_report,
+    build_template_preview,
     build_ats_pdf,
     build_ats_docx,
     build_cv_xlsx,
@@ -23,6 +33,7 @@ from cv_engine import (
 )
 
 APP_PIN = "6932"
+AI_SETTINGS_PASSWORD = "6932AI"
 ROOT_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = ROOT_DIR / "assets"
 OWNER_PHOTO = ASSETS_DIR / "owner_photo.jpg"
@@ -84,12 +95,14 @@ THEMES = {
 st.session_state.setdefault("theme", "Dark")
 st.session_state.setdefault("screen", "home")
 st.session_state.setdefault("change_cv", False)
+st.session_state.setdefault("ai_settings", provider_settings())
 
 
-def paint(theme_name: str) -> None:
+@st.cache_data(show_spinner=False)
+def theme_css(theme_name: str) -> str:
+    """Build the theme stylesheet once per theme instead of on every rerun."""
     t = THEMES[theme_name]
-    st.markdown(
-        f"""
+    return f"""
         <style>
         .stApp {{ background: {t["bg"]}; background-image: {t["glow"]}; }}
         .block-container {{ padding-top: 2.2rem; max-width: 900px; }}
@@ -233,6 +246,9 @@ def paint(theme_name: str) -> None:
         .st-key-home_card_make div.stButton > button {{
             animation-delay: .18s;
         }}
+        .st-key-home_card_templates div.stButton > button {{
+            animation-delay: .27s;
+        }}
         .option-card::before {{
             content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
             background: linear-gradient(90deg, {t["accent"]}, {t["accent2"]});
@@ -248,13 +264,15 @@ def paint(theme_name: str) -> None:
         }}
         .option-card h4 {{ margin: 0 0 .3rem; font-size: 1.12rem; }}
         .option-card p {{ margin: 0; color: {t["muted"]}; font-size: .9rem; }}
-        .st-key-theme_toggle div.stButton > button {{
+        .st-key-theme_toggle div.stButton > button,
+        .st-key-ai_provider_button div.stButton > button {{
             width: 3.1rem; min-height: 3.1rem; padding: 0;
             border-radius: 50%; font-size: 1.35rem;
             background: {t["panel"]}; border: 1.5px solid {t["border"]};
             box-shadow: {t["shadow"]};
         }}
-        .st-key-theme_toggle div.stButton > button:hover {{
+        .st-key-theme_toggle div.stButton > button:hover,
+        .st-key-ai_provider_button div.stButton > button:hover {{
             transform: rotate(-18deg) scale(1.08);
             background: linear-gradient(135deg, {t["accent"]}, {t["accent2"]});
         }}
@@ -338,10 +356,6 @@ def paint(theme_name: str) -> None:
             from {{ opacity: 0; transform: translateY(10px); }}
             to   {{ opacity: 1; transform: translateY(0); }}
         }}
-        @keyframes agentPulse {{
-            0%, 100% {{ box-shadow: 0 0 0 0 {t["accent"]}00; }}
-            50%      {{ box-shadow: 0 0 0 6px {t["accent"]}1f; }}
-        }}
         @keyframes agentBarGrow {{
             from {{ transform: scaleX(0); }}
             to   {{ transform: scaleX(1); }}
@@ -349,7 +363,6 @@ def paint(theme_name: str) -> None:
 
         .hero {{ animation: agentFadeUp .55s ease both; }}
         .step {{ animation: agentFadeUp .45s ease both; }}
-        .step .num {{ animation: agentPulse 3.2s ease-in-out infinite; }}
         .card {{
             animation: agentFadeUp .5s ease both;
             transition: transform .18s ease, box-shadow .18s ease,
@@ -391,11 +404,14 @@ def paint(theme_name: str) -> None:
             }}
         }}
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+        """
 
 
+def paint(theme_name: str) -> None:
+    st.markdown(theme_css(theme_name), unsafe_allow_html=True)
+
+
+@st.cache_data(show_spinner=False)
 def backdrop_photo_uri() -> str:
     """Optional user photo backdrop: drop a file in assets/background.<ext>."""
     for ext in ("jpg", "jpeg", "png", "webp"):
@@ -441,6 +457,7 @@ def store_cv(pdf_bytes: bytes, original_name: str, text: str) -> dict:
     return save_existing_cv(pdf_bytes, original_name, text)
 
 
+@st.cache_data(show_spinner=False)
 def owner_photo_uri() -> str:
     """Base64 data URI for the bundled passport-size owner photo."""
     if not OWNER_PHOTO.exists():
@@ -463,7 +480,8 @@ def photo_backdrop(theme_name: str) -> None:
             background-image: url("{uri}");
             background-size: cover; background-position: center;
             opacity: {opacity}; filter: blur(1.5px) saturate(.9);
-            animation: agentZoom 34s ease-in-out infinite alternate;
+            will-change: transform;
+            animation: agentZoom 44s ease-in-out infinite alternate;
         }}
         @keyframes agentZoom {{
             0%   {{ transform: scale(1) translate3d(0, 0, 0); }}
@@ -480,30 +498,27 @@ def photo_backdrop(theme_name: str) -> None:
 
 
 def animated_backdrop(theme_name: str) -> None:
-    """Slow moving gradient + grid backdrop for the front page (CSS only)."""
+    """Front-page backdrop. Only transform/opacity animate, so the GPU does
+    the work and clicks stay responsive."""
     t = THEMES[theme_name]
     blob = "26" if theme_name == "Dark" else "1c"
     grid = "0.05" if theme_name == "Dark" else "0.035"
     st.markdown(
         f"""
         <style>
-        .stApp {{
+        .stApp::before {{
+            content: ""; position: fixed; inset: -25%;
+            pointer-events: none; z-index: 0;
             background-image:
                 radial-gradient(620px 420px at 18% 12%, {t["accent"]}{blob}, transparent 70%),
                 radial-gradient(560px 400px at 82% 18%, {t["accent2"]}{blob}, transparent 70%),
-                radial-gradient(520px 380px at 50% 92%, {t["accent"]}{blob}, transparent 70%);
-            background-repeat: no-repeat;
-            background-size: 140% 140%, 130% 130%, 150% 150%;
-            animation: agentDrift 28s ease-in-out infinite alternate;
-        }}
-        .stApp::before {{
-            content: ""; position: fixed; inset: -20% -20% -20% -20%;
-            pointer-events: none; z-index: 0;
-            background-image:
+                radial-gradient(520px 380px at 50% 92%, {t["accent"]}{blob}, transparent 70%),
                 linear-gradient(rgba(125,140,220,{grid}) 1px, transparent 1px),
                 linear-gradient(90deg, rgba(125,140,220,{grid}) 1px, transparent 1px);
-            background-size: 62px 62px, 62px 62px;
-            animation: agentGrid 42s linear infinite;
+            background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat;
+            background-size: 90% 90%, 80% 80%, 95% 95%, 62px 62px, 62px 62px;
+            will-change: transform;
+            animation: agentDrift 40s ease-in-out infinite alternate;
         }}
         .block-container {{ position: relative; z-index: 1; }}
         .hero {{ position: relative; overflow: hidden; }}
@@ -512,26 +527,21 @@ def animated_backdrop(theme_name: str) -> None:
             width: 45%; height: 220%; pointer-events: none;
             background: linear-gradient(
                 100deg, transparent, rgba(255,255,255,.16), transparent);
-            transform: rotate(14deg);
-            animation: agentSheen 7.5s ease-in-out infinite;
+            will-change: transform, opacity;
+            animation: agentSheen 5s ease-in-out 2 both;
         }}
         @keyframes agentDrift {{
-            0%   {{ background-position: 0% 0%, 100% 0%, 50% 100%; }}
-            50%  {{ background-position: 30% 20%, 70% 25%, 40% 75%; }}
-            100% {{ background-position: 12% 40%, 88% 8%, 60% 90%; }}
-        }}
-        @keyframes agentGrid {{
-            0%   {{ transform: translate3d(0, 0, 0); }}
-            100% {{ transform: translate3d(62px, 62px, 0); }}
+            0%   {{ transform: translate3d(0, 0, 0) scale(1); }}
+            100% {{ transform: translate3d(2.5%, 2%, 0) scale(1.04); }}
         }}
         @keyframes agentSheen {{
-            0%   {{ left: -35%; opacity: 0; }}
-            18%  {{ opacity: 1; }}
-            60%  {{ left: 115%; opacity: 0; }}
-            100% {{ left: 115%; opacity: 0; }}
+            0%   {{ transform: translate3d(0, 0, 0) rotate(14deg); opacity: 0; }}
+            20%  {{ opacity: .9; }}
+            65%  {{ transform: translate3d(340%, 0, 0) rotate(14deg); opacity: 0; }}
+            100% {{ transform: translate3d(340%, 0, 0) rotate(14deg); opacity: 0; }}
         }}
         @media (prefers-reduced-motion: reduce) {{
-            .stApp, .stApp::before, .hero::after {{ animation: none; }}
+            .stApp::before, .hero::after {{ animation: none; }}
         }}
         </style>
         """,
@@ -553,7 +563,17 @@ def activate_cv(meta: dict, text: str, pdf_bytes: bytes) -> None:
 
 
 def clear_cv_session() -> None:
-    for key in ("cv_meta", "cv_text", "cv_pdf", "cv_ready", "generated"):
+    for key in (
+        "cv_meta",
+        "cv_text",
+        "cv_pdf",
+        "cv_ready",
+        "generated",
+        "upload_generated",
+        "upload_source",
+        "existing_ats_source",
+        "manual_ats_source",
+    ):
         st.session_state.pop(key, None)
     st.session_state["change_cv"] = False
 
@@ -631,15 +651,258 @@ def pin_dialog() -> None:
             st.error("Incorrect PIN. Please try again.")
 
 
+@st.dialog("Select AI Provider")
+def ai_provider_dialog() -> None:
+    """Password-protected, session-only provider configuration."""
+    if not st.session_state.get("ai_settings_unlocked"):
+        st.caption(
+            "Enter the AI settings password. This is separate from the app PIN."
+        )
+        entered = st.text_input(
+            "Password",
+            type="password",
+            key="ai_provider_password_input",
+        )
+        if st.button(
+            "Unlock provider settings",
+            type="primary",
+            use_container_width=True,
+            key="ai_provider_unlock",
+        ):
+            if entered == AI_SETTINGS_PASSWORD:
+                st.session_state["ai_settings_unlocked"] = True
+                st.rerun()
+            else:
+                st.error("Incorrect AI settings password.")
+        if st.button(
+            "Cancel",
+            use_container_width=True,
+            key="ai_provider_cancel_locked",
+        ):
+            st.session_state["show_ai_provider"] = False
+            st.rerun()
+        return
+
+    settings = provider_settings(st.session_state.get("ai_settings"))
+    providers = list(PROVIDER_LABELS)
+    selected = str(settings.get("selected", "ollama"))
+    selected_index = providers.index(selected) if selected in providers else 0
+
+    st.warning(
+        "The password protects this screen in the UI, but it is hardcoded in "
+        "this public project and is not a security boundary."
+    )
+    with st.form("ai_provider_settings_form", clear_on_submit=False):
+        provider_name = st.selectbox(
+            "Select AI Provider",
+            options=providers,
+            index=selected_index,
+            format_func=lambda name: PROVIDER_LABELS[name],
+        )
+        fallback = st.checkbox(
+            "Automatically fall back to the other configured providers",
+            value=bool(settings.get("fallback", True)),
+        )
+        st.caption(
+            "Default chain starts with your selected provider. If it fails, "
+            "the remaining configured providers are tried automatically."
+        )
+
+        st.markdown("**Ollama — free and local**")
+        ollama_col, ollama_model_col = st.columns([1.25, 1])
+        with ollama_col:
+            ollama_url = st.text_input(
+                "Ollama URL",
+                value=str(settings.get("ollama_url", "")),
+                placeholder="http://localhost:11434",
+            )
+        with ollama_model_col:
+            ollama_model = st.text_input(
+                "Ollama model",
+                value=str(settings.get("ollama_model", "")),
+                placeholder="llama3.2:3b",
+            )
+
+        st.markdown("**Gemini — free tier**")
+        gemini_model = st.text_input(
+            "Gemini model",
+            value=str(settings.get("gemini_model", "")),
+        )
+        gemini_key = st.text_input(
+            "Gemini API key",
+            value=str(settings.get("gemini_key", "")),
+            type="password",
+            help="Kept only in this Streamlit session; never written to disk.",
+        )
+
+        st.markdown("**Groq — free tier**")
+        groq_model = st.text_input(
+            "Groq model",
+            value=str(settings.get("groq_model", "")),
+        )
+        groq_key = st.text_input(
+            "Groq API key",
+            value=str(settings.get("groq_key", "")),
+            type="password",
+            help="Kept only in this Streamlit session; never written to disk.",
+        )
+        timeout = st.slider(
+            "Provider timeout (seconds)",
+            min_value=5,
+            max_value=120,
+            value=int(settings.get("timeout", 45)),
+            step=5,
+        )
+        save_settings = st.form_submit_button(
+            "Save for this session",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if save_settings:
+        st.session_state["ai_settings"] = provider_settings(
+            {
+                "selected": provider_name,
+                "fallback": fallback,
+                "ollama_url": ollama_url.strip(),
+                "ollama_model": ollama_model.strip(),
+                "gemini_model": gemini_model.strip(),
+                "gemini_key": gemini_key.strip(),
+                "groq_model": groq_model.strip(),
+                "groq_key": groq_key.strip(),
+                "timeout": timeout,
+            }
+        )
+        st.session_state["ai_provider_status"] = (
+            f"Saved: {PROVIDER_LABELS[provider_name]}"
+        )
+        st.rerun()
+
+    status = st.session_state.get("ai_provider_status")
+    if status:
+        st.info(status)
+
+    test_col, close_col = st.columns(2)
+    with test_col:
+        if st.button(
+            "Test selected provider",
+            use_container_width=True,
+            key="ai_provider_test",
+        ):
+            current = provider_settings(st.session_state.get("ai_settings"))
+            with st.spinner("Testing provider connection..."):
+                ok, message = test_provider(
+                    str(current["selected"]),
+                    current,
+                )
+            st.session_state["ai_provider_status"] = (
+                ("Connected: " if ok else "Connection failed: ") + message
+            )
+            st.rerun()
+    with close_col:
+        if st.button(
+            "Close",
+            use_container_width=True,
+            key="ai_provider_close",
+        ):
+            st.session_state["show_ai_provider"] = False
+            st.session_state["ai_settings_unlocked"] = False
+            st.session_state.pop("ai_provider_password_input", None)
+            st.rerun()
+
+    st.caption(
+        "Privacy: Ollama stays on this computer. Gemini or Groq receives the "
+        "uploaded CV and JD when selected or used as a fallback. Cloud keys "
+        "and settings are cleared when you log out."
+    )
+
+
+def align_cv_to_jd(
+    cv_text: str,
+    jd_text: str,
+    extra_skills: list[str] | None = None,
+    headline: str | None = None,
+    ai_settings: dict | None = None,
+) -> dict:
+    """Apply the same deterministic + optional AI ATS pipeline to any CV."""
+    original_match = match_jd(cv_text, jd_text)
+    tailored = build_tailored_text(
+        cv_text,
+        original_match,
+        extra_skills=extra_skills,
+        headline=headline,
+    )
+    match = match_jd(tailored, jd_text)
+    report = ats_report(tailored, jd_text, match)
+    ai_result = run_ai_analysis(
+        tailored,
+        jd_text,
+        report,
+        allowed_skills=match["matched"],
+        missing_skills=match["missing"],
+        settings=ai_settings,
+    )
+    if ai_result["ok"] and ai_result["response"]:
+        tailored = apply_ai_response(tailored, ai_result["response"])
+        match = match_jd(tailored, jd_text)
+        report = ats_report(tailored, jd_text, match)
+
+    return {
+        "match": match,
+        "report": report,
+        "text": tailored,
+        "added_skills": list(extra_skills or []),
+        "ai": ai_result,
+    }
+
+
+def build_upload_docx(
+    cv_text: str,
+    jd_text: str,
+    source_name: str,
+    extra_skills: list[str] | None = None,
+    headline: str | None = None,
+    ai_settings: dict | None = None,
+) -> dict:
+    """Rebuild an uploaded CV as an ATS DOCX aligned to the pasted JD."""
+    result = align_cv_to_jd(
+        cv_text,
+        jd_text,
+        extra_skills=extra_skills,
+        headline=headline,
+        ai_settings=ai_settings,
+    )
+    stem = random_output_stem()
+    docx_bytes = build_ats_docx(
+        result["text"], title=stem, template="reference"
+    )
+    filename = stem + ".docx"
+    if not is_hosted():
+        save_generated(docx_bytes, filename)
+    return {
+        **result,
+        "data": docx_bytes,
+        "filename": filename,
+        "source_name": source_name,
+    }
+
+
 def build_all_formats(
     text: str,
     stem: str | None = None,
     photo_bytes: bytes | None = None,
+    template: str = "reference",
 ) -> dict:
     stem = stem or random_output_stem()
-    pdf_bytes = build_ats_pdf(text, title=stem, photo_bytes=photo_bytes)
-    docx_bytes = build_ats_docx(text, title=stem, photo_bytes=photo_bytes)
-    xlsx_bytes = build_cv_xlsx(text, title=stem, photo_bytes=photo_bytes)
+    pdf_bytes = build_ats_pdf(
+        text, title=stem, photo_bytes=photo_bytes, template=template
+    )
+    docx_bytes = build_ats_docx(
+        text, title=stem, photo_bytes=photo_bytes, template=template
+    )
+    xlsx_bytes = build_cv_xlsx(
+        text, title=stem, photo_bytes=photo_bytes, template=template
+    )
     hosted = is_hosted()
 
     def keep(data: bytes, filename: str) -> str:
@@ -676,6 +939,155 @@ def build_all_formats(
             "path": keep(xlsx_bytes, stem + ".xlsx"),
         },
     }
+
+
+def build_manual_jd_result(
+    base_text: str,
+    jd_text: str,
+    photo_bytes: bytes | None,
+    template: str,
+    signature: str,
+    template_label: str,
+    extra_skills: list[str] | None = None,
+    headline: str | None = None,
+) -> dict:
+    """Apply the Option 1 ATS pipeline while retaining all manual formats."""
+    result = align_cv_to_jd(
+        base_text,
+        jd_text,
+        extra_skills=extra_skills,
+        headline=headline,
+        ai_settings=st.session_state.get("ai_settings"),
+    )
+    return {
+        **result,
+        "files": build_all_formats(
+            result["text"],
+            photo_bytes=photo_bytes,
+            template=template,
+        ),
+        "skills": result["match"]["matched"],
+        "signature": signature,
+        "template": template,
+        "template_label": template_label,
+    }
+
+
+def render_ats_overview(result: dict) -> None:
+    """Shared ATS/AI report used by Upload, Existing and Make CV flows."""
+    match = result["match"]
+    report = result["report"]
+    title = report["title"]
+
+    if match["missing"]:
+        st.warning(
+            "Missing from your CV but requested in the JD: "
+            + ", ".join(match["missing"])
+        )
+        st.caption(
+            "Nothing missing is added unless you truthfully confirm it."
+        )
+
+    overall_col, skills_col, title_col, format_col = st.columns(4)
+    overall_col.metric("Overall ATS score", f"{report['overall']}%")
+    skills_col.metric("Skill match", f"{report['skills_score']}%")
+    title_col.metric(
+        "Title match",
+        "N/A" if title["score"] is None else f"{title['score']}%",
+    )
+    format_col.metric("Format", f"{report['format_score']}%")
+
+    if report["required_years"]:
+        st.caption(
+            f"Experience: JD asks for about {report['required_years']} years; "
+            f"CV dates add up to {report['cv_years']} years."
+        )
+    else:
+        st.caption(
+            f"Experience: JD states no year requirement; CV dates add up to "
+            f"{report['cv_years']} years."
+        )
+    if title["jd_title"]:
+        st.caption(
+            f"JD title: {title['jd_title']} · CV headline: "
+            f"{title['cv_title'] or 'not detected'}"
+        )
+
+    if match["matched"]:
+        st.markdown("**Verified JD skills prioritised in the CV**")
+        st.markdown(
+            "".join(
+                f'<span class="pill">{skill}</span>'
+                for skill in match["matched"]
+            ),
+            unsafe_allow_html=True,
+        )
+    if result.get("added_skills"):
+        st.info(
+            "Added because you confirmed them: "
+            + ", ".join(result["added_skills"])
+        )
+
+    ai_result = result.get("ai", {})
+    if ai_result.get("ok"):
+        provider_name = str(ai_result.get("provider", ""))
+        st.success(
+            "AI suggestions prepared by "
+            + PROVIDER_LABELS.get(provider_name, provider_name.title())
+            + "."
+        )
+        ai_response = ai_result.get("response") or {}
+        if ai_response.get("suggestions"):
+            st.markdown("**AI suggestions**")
+            for suggestion in ai_response["suggestions"]:
+                st.markdown(f"- {suggestion}")
+        for warning in ai_response.get("validation_warnings", []):
+            st.warning(warning)
+    else:
+        st.warning(
+            "No AI provider was available. Deterministic ATS rules still "
+            "generated the CV safely."
+        )
+
+    if report["suggestions"]:
+        st.markdown("**Improve your chances**")
+        for tip in report["suggestions"]:
+            st.markdown(f"- {tip}")
+
+
+@st.cache_data(show_spinner=False)
+def template_preview(text: str, template: str) -> bytes:
+    return build_template_preview(text, template)
+
+
+SAMPLE_CV_SECTIONS = {
+    "skills": "Python, Django, AWS, Docker, MySQL, Git, Linux",
+    "experience": (
+        "Example Technologies, Pune - Software Engineer (Jul 2023 - Present)\n"
+        "Built and maintained backend REST APIs for a banking client\n"
+        "Automated build and deployment steps with Jenkins pipelines"
+    ),
+    "projects": (
+        "Expense Tracker - Django app with MySQL and Docker deployment\n"
+        "Supports multi-user accounts and monthly reports"
+    ),
+    "education": "Master of Computer Application - RGPV Bhopal (2023 - 2025)",
+    "certifications": "AWS Cloud Practitioner - Amazon (2024)",
+}
+
+
+@st.cache_data(show_spinner=False)
+def sample_cv_text() -> str:
+    """Neutral example CV used only to show what each template looks like."""
+    return compose_cv_text(
+        name="Your Name",
+        email="you@example.com",
+        phone="98765 43210",
+        city="Indore",
+        state="Madhya Pradesh",
+        headline="Python Developer",
+        sections=SAMPLE_CV_SECTIONS,
+    )
 
 
 @st.dialog("Download your CV")
@@ -767,7 +1179,15 @@ with st.sidebar:
         )
 
 is_dark = st.session_state["theme"] == "Dark"
-spacer, toggle_col = st.columns([8, 1])
+spacer, ai_col, toggle_col = st.columns([7, 1, 1])
+with ai_col:
+    with st.container(key="ai_provider_button"):
+        if st.button(
+            "AI",
+            help="Select and configure the free AI provider",
+            key="open_ai_provider",
+        ):
+            st.session_state["show_ai_provider"] = True
 with toggle_col:
     with st.container(key="theme_toggle"):
         if st.button(
@@ -776,6 +1196,9 @@ with toggle_col:
         ):
             st.session_state["theme"] = "Light" if is_dark else "Dark"
             st.rerun()
+
+if st.session_state.get("show_ai_provider"):
+    ai_provider_dialog()
 
 screen = st.session_state["screen"]
 if screen == "home":
@@ -807,7 +1230,7 @@ if screen == "home":
         if is_hosted()
         else "Upload a new CV PDF. Your details are saved on this computer."
     )
-    left, right, third = st.columns(3)
+    left, right, third, fourth = st.columns(4)
     with left:
         with st.container(key="home_card_upload"):
             if st.button(
@@ -835,32 +1258,284 @@ if screen == "home":
         with st.container(key="home_card_make"):
             if st.button(
                 "✍\n\n3. Make your CV\n\n"
-                "Fill in your details and build a new ATS CV.",
+                "Fill in your details and build a simple ATS CV.",
                 key="home_make",
                 use_container_width=True,
             ):
                 clear_cv_session()
                 st.session_state.pop("manual_generated", None)
+                st.session_state.pop("make_template", None)
                 go("make")
+    with fourth:
+        with st.container(key="home_card_templates"):
+            if st.button(
+                "🎨\n\n4. Templates\n\n"
+                "See template designs, pick one, then fill the same form.",
+                key="home_templates",
+                use_container_width=True,
+            ):
+                clear_cv_session()
+                st.session_state.pop("manual_generated", None)
+                go("templates")
+
+elif screen == "templates":
+    step(1, "Choose a template")
+    st.caption(
+        "Choose from 10 free ATS-friendly designs. Each preview uses example "
+        "content; after selection, fill in your own details and target JD."
+    )
+    sample = sample_cv_text()
+    template_items = list(CV_TEMPLATES.items())
+    for row_start in range(0, len(template_items), 3):
+        row_items = template_items[row_start : row_start + 3]
+        columns = st.columns(3)
+        for (template, design), column in zip(row_items, columns):
+            with column:
+                st.image(template_preview(sample, template), width="stretch")
+                st.markdown(f"**{design['label']}**")
+                st.caption(design["description"])
+                if st.button(
+                    f"Use {design['label']}",
+                    type="primary" if template == "reference" else "secondary",
+                    use_container_width=True,
+                    key=f"pick_template_{template}",
+                ):
+                    st.session_state["make_template"] = template
+                    st.session_state.pop("manual_generated", None)
+                    go("make")
+    exit_button("exit_templates")
 
 elif screen == "upload":
-    step(1, "Upload your CV")
-    uploaded = st.file_uploader(
-        "CV (PDF)",
-        type=["pdf"],
-        help="Upload a selectable-text PDF. Scanned image PDFs are not supported.",
+    step(1, "Upload CV and add the job description")
+    st.caption(
+        "Upload a selectable-text PDF. My_AGENT will rebuild its content as a "
+        "clean ATS-friendly DOCX and prioritise only skills already verified "
+        "in your CV."
     )
-    if uploaded is not None:
-        file_bytes = uploaded.getvalue()
-        try:
-            extracted = extract_pdf_text(file_bytes)
-            st.success(f"Text extracted: {len(extracted)} characters")
-            if st.button("Use this CV", type="primary"):
-                meta = store_cv(file_bytes, uploaded.name, extracted)
-                activate_cv(meta, extracted, file_bytes)
-                st.rerun()
-        except Exception as exc:
-            st.error(str(exc))
+    with st.form("upload_cv_jd_form", clear_on_submit=False):
+        uploaded = st.file_uploader(
+            "Your CV (PDF)",
+            type=["pdf"],
+            help=(
+                "The PDF must contain selectable text. Scanned image PDFs are "
+                "not supported."
+            ),
+        )
+        upload_jd = st.text_area(
+            "Job Description",
+            height=260,
+            placeholder=(
+                "Paste the company, role, responsibilities, required skills "
+                "and experience here..."
+            ),
+        )
+        upload_submit = st.form_submit_button(
+            "⚡ Convert to ATS-friendly DOCX",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if upload_submit:
+        if uploaded is None:
+            st.error("Please upload your CV in PDF format.")
+        elif len(upload_jd.strip()) < 50:
+            st.error("Please paste the complete JD (at least 50 characters).")
+        else:
+            try:
+                file_bytes = uploaded.getvalue()
+                with st.spinner("Reading the CV and preparing your ATS DOCX..."):
+                    extracted = extract_pdf_text(file_bytes)
+                    meta = store_cv(file_bytes, uploaded.name, extracted)
+                    activate_cv(meta, extracted, file_bytes)
+                    st.session_state["upload_source"] = {
+                        "cv_text": extracted,
+                        "jd_text": upload_jd,
+                        "name": uploaded.name,
+                    }
+                    st.session_state["upload_generated"] = build_upload_docx(
+                        extracted,
+                        upload_jd,
+                        uploaded.name,
+                        ai_settings=st.session_state.get("ai_settings"),
+                    )
+            except Exception as exc:
+                st.error(str(exc))
+
+    upload_source = st.session_state.get("upload_source")
+    upload_result = st.session_state.get("upload_generated")
+    if upload_source and upload_result:
+        match = upload_result["match"]
+        report = upload_result["report"]
+        title = report["title"]
+        st.divider()
+        step(2, "How an ATS will read this CV")
+        st.success(
+            f"{upload_result['source_name']} was converted and aligned to the JD."
+        )
+
+        if match["missing"]:
+            st.warning(
+                "Missing from your CV but requested in the JD: "
+                + ", ".join(match["missing"])
+            )
+            st.markdown(
+                "".join(
+                    f'<span class="pill">{skill}</span>'
+                    for skill in match["missing"]
+                ),
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "These are suggestions only. Nothing missing is added unless "
+                "you confirm it below."
+            )
+
+        overall_col, skills_col, title_col, format_col = st.columns(4)
+        overall_col.metric("Overall ATS score", f"{report['overall']}%")
+        skills_col.metric("Skill match", f"{report['skills_score']}%")
+        title_col.metric(
+            "Title match",
+            "N/A" if title["score"] is None else f"{title['score']}%",
+        )
+        format_col.metric("Format", f"{report['format_score']}%")
+
+        if report["required_years"]:
+            st.caption(
+                f"Experience: the JD asks for about {report['required_years']} "
+                f"years and your CV dates add up to {report['cv_years']} years."
+            )
+        else:
+            st.caption(
+                f"Experience: the JD states no year requirement. Your CV dates "
+                f"add up to {report['cv_years']} years."
+            )
+        if title["jd_title"]:
+            st.caption(
+                f"JD title: {title['jd_title']} · Your headline: "
+                f"{title['cv_title'] or 'not detected'}"
+            )
+
+        if match["matched"]:
+            st.markdown("**Verified skills prioritised in the DOCX**")
+            st.markdown(
+                "".join(
+                    f'<span class="pill">{skill}</span>'
+                    for skill in match["matched"]
+                ),
+                unsafe_allow_html=True,
+            )
+        if upload_result["added_skills"]:
+            st.info(
+                "Added because you confirmed them: "
+                + ", ".join(upload_result["added_skills"])
+            )
+        if not match["requested"]:
+            st.info(
+                "No skill keywords were identified in the JD. The CV was still "
+                "converted into the ATS-friendly reference format."
+            )
+
+        ai_result = upload_result.get("ai", {})
+        if ai_result.get("ok"):
+            provider_name = str(ai_result.get("provider", ""))
+            st.success(
+                "AI suggestions prepared by "
+                + PROVIDER_LABELS.get(provider_name, provider_name.title())
+                + "."
+            )
+            ai_response = ai_result.get("response") or {}
+            if ai_response.get("suggestions"):
+                st.markdown("**AI suggestions**")
+                for suggestion in ai_response["suggestions"]:
+                    st.markdown(f"- {suggestion}")
+            for warning in ai_response.get("validation_warnings", []):
+                st.warning(warning)
+        else:
+            st.warning(
+                "No AI provider was available. The ATS rules still generated "
+                "your DOCX safely; configure a provider from the AI button."
+            )
+
+        attempts = ai_result.get("attempts", [])
+        if attempts:
+            with st.expander("AI provider attempts"):
+                for attempt in attempts:
+                    label = PROVIDER_LABELS.get(
+                        attempt["provider"], attempt["provider"].title()
+                    )
+                    detail = (
+                        f" — {attempt['detail']}" if attempt.get("detail") else ""
+                    )
+                    st.write(f"{label}: {attempt['status']}{detail}")
+
+        if report["suggestions"]:
+            st.markdown("**Improve your chances**")
+            for tip in report["suggestions"]:
+                st.markdown(f"- {tip}")
+
+        if match["missing"] or title["jd_title"]:
+            st.divider()
+            step(3, "Fix the gaps, then rebuild")
+        confirmed_skills: list[str] = []
+        if match["missing"]:
+            confirmed_skills = st.multiselect(
+                "Skills the JD wants that are not in your CV",
+                options=match["missing"],
+                key="upload_confirm_skills",
+                help=(
+                    "Tick only what you genuinely have. Anything you tick is "
+                    "added to the CV; the rest is never invented for you."
+                ),
+            )
+            st.caption(
+                "Never tick a skill you cannot defend in an interview — a "
+                "recruiter will verify it."
+            )
+        use_jd_title = False
+        if title["jd_title"] and (title["score"] or 0) < 100:
+            use_jd_title = st.checkbox(
+                f"Set my CV headline to \"{title['jd_title']}\"",
+                key="upload_use_jd_title",
+                help=(
+                    "Use this only when your actual role matches the JD title."
+                ),
+            )
+        if match["missing"] or title["jd_title"]:
+            if st.button(
+                "🔁 Rebuild DOCX with my confirmations",
+                key="upload_rebuild",
+                use_container_width=True,
+            ):
+                try:
+                    with st.spinner("Rebuilding your ATS DOCX..."):
+                        st.session_state["upload_generated"] = build_upload_docx(
+                            upload_source["cv_text"],
+                            upload_source["jd_text"],
+                            upload_source["name"],
+                            extra_skills=confirmed_skills,
+                            headline=title["jd_title"] if use_jd_title else None,
+                            ai_settings=st.session_state.get("ai_settings"),
+                        )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+        st.divider()
+        step(4, "Download")
+        with st.expander("Preview ATS CV content"):
+            st.text(upload_result["text"])
+        st.download_button(
+            "⬇ Download ATS DOCX",
+            data=upload_result["data"],
+            file_name=upload_result["filename"],
+            mime=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            type="primary",
+            use_container_width=True,
+            key="upload_docx_download",
+        )
     exit_button("exit_upload")
 
 elif screen == "existing":
@@ -1080,127 +1755,181 @@ elif screen == "settings":
     exit_button("exit_settings")
 
 elif screen == "make":
+    chosen_template = st.session_state.get("make_template", "reference")
+    if chosen_template not in CV_TEMPLATES:
+        chosen_template = "reference"
+        st.session_state["make_template"] = chosen_template
+    chosen_design = CV_TEMPLATES[chosen_template]
     step(1, "Make your CV")
     st.caption(
-        "No field is mandatory. The more details you add, the more complete "
-        "your CV will be."
+        "CV detail fields are optional, but a target JD is required for ATS "
+        "tailoring. The more details you add, the more complete your CV will be."
     )
-    form_left, form_right = st.columns(2)
-    with form_left:
-        full_name = st.text_input("Name", key="make_name", placeholder="Your full name")
-        phone = st.text_input("Number", key="make_phone", placeholder="Mobile number")
-    with form_right:
-        email = st.text_input("Email", key="make_email", placeholder="you@example.com")
-        address = st.text_input(
-            "Address",
-            key="make_address",
-            placeholder="House / street / locality",
+    if st.session_state.get("make_template"):
+        badge, change = st.columns([3, 1])
+        badge.success(f"Selected template: {chosen_design['label']}")
+        if change.button("Change template", key="make_change_template"):
+            st.session_state.pop("manual_generated", None)
+            go("templates")
+    else:
+        st.info(
+            "This builds a simple CV in the reference design. For other designs, "
+            "use **Templates** on the front page."
         )
-    city_col, state_col = st.columns(2)
-    with city_col:
-        city = st.text_input("City", key="make_city", placeholder="City")
-    with state_col:
-        state = st.text_input("State", key="make_state", placeholder="State")
-    headline = st.text_input(
-        "Job Title / Role",
-        key="make_headline",
-        placeholder="DevOps Engineer, Java Full Stack Developer, Python Developer...",
-    )
-    profile_photo = st.file_uploader(
-        "Profile photo (optional)",
-        type=["jpg", "jpeg", "png", "webp"],
-        key="make_photo",
-        help="If added, the photo is placed at the top-right of the generated CV.",
-    )
+    # A form submits every field together, so one click never loses text that
+    # was still being typed.
+    with st.form("make_cv_form", clear_on_submit=False, border=False):
+        form_left, form_right = st.columns(2)
+        with form_left:
+            full_name = st.text_input(
+                "Name", key="make_name", placeholder="Your full name"
+            )
+            phone = st.text_input(
+                "Number", key="make_phone", placeholder="Mobile number"
+            )
+        with form_right:
+            email = st.text_input(
+                "Email", key="make_email", placeholder="you@example.com"
+            )
+            address = st.text_input(
+                "Address",
+                key="make_address",
+                placeholder="House / street / locality",
+            )
+        city_col, state_col = st.columns(2)
+        with city_col:
+            city = st.text_input("City", key="make_city", placeholder="City")
+        with state_col:
+            state = st.text_input("State", key="make_state", placeholder="State")
+        headline = st.text_input(
+            "Job Title / Role",
+            key="make_headline",
+            placeholder=(
+                "DevOps Engineer, Java Full Stack Developer, Python Developer..."
+            ),
+        )
+        profile_photo = st.file_uploader(
+            "Profile photo (optional)",
+            type=["jpg", "jpeg", "png", "webp"],
+            key="make_photo",
+            help="If added, the photo is placed at the top-right of the CV.",
+        )
+
+        st.markdown("**CV sections** — fill in whichever apply to you")
+        summary = st.text_area(
+            "Professional Summary",
+            key="make_summary",
+            height=90,
+            placeholder="2–4 lines about your background and goal",
+        )
+        skills_text = st.text_area(
+            "Skills",
+            key="make_skills",
+            height=80,
+            placeholder="Python, Java, React, AWS...",
+        )
+        exp_col, proj_col = st.columns(2)
+        with exp_col:
+            experience = st.text_area(
+                "Professional Experience",
+                key="make_experience",
+                height=140,
+                placeholder=(
+                    "Role\nCompany, city\nJoining date - end date\n"
+                    "- What you built or handled"
+                ),
+            )
+        with proj_col:
+            projects = st.text_area(
+                "Projects",
+                key="make_projects",
+                height=140,
+                placeholder="Project name, what you built, stack",
+            )
+        edu_col, qual_col, cert_col = st.columns(3)
+        with edu_col:
+            education = st.text_area(
+                "Education",
+                key="make_education",
+                height=110,
+                placeholder="Degree, college, year",
+            )
+        with qual_col:
+            qualification = st.text_area(
+                "Qualification",
+                key="make_qualification",
+                height=110,
+                placeholder="12th / 10th board, school, percentage, year",
+            )
+        with cert_col:
+            certifications = st.text_area(
+                "Certifications",
+                key="make_certifications",
+                height=110,
+                placeholder="Certificate name, issuer, year",
+            )
+        intern_col, extra_col, lang_col = st.columns(3)
+        with intern_col:
+            internships = st.text_area(
+                "Internships",
+                key="make_internships",
+                height=90,
+                placeholder="Company, role, dates",
+            )
+        with extra_col:
+            achievements = st.text_area(
+                "Achievements",
+                key="make_achievements",
+                height=90,
+                placeholder="Awards, rankings, highlights",
+            )
+        with lang_col:
+            languages = st.text_area(
+                "Languages",
+                key="make_languages",
+                height=90,
+                placeholder="English, Hindi...",
+            )
+
+        st.markdown("**Give me your all details**")
+        details = st.text_area(
+            "All details",
+            height=180,
+            label_visibility="collapsed",
+            key="make_details",
+            placeholder=(
+                "Extra notes, additional skills, college or home address — "
+                "anything missed in the fields above"
+            ),
+        )
+        st.caption(
+            "Note: this box accepts extra skills, experience, college details, "
+            "or your home address. Nothing here is mandatory."
+        )
+        st.markdown("**Target Job Description — required for ATS tailoring**")
+        make_jd = st.text_area(
+            "Target Job Description",
+            key="make_jd",
+            height=220,
+            label_visibility="collapsed",
+            placeholder=(
+                "Paste the company, role, responsibilities, required skills "
+                "and experience here..."
+            ),
+        )
+        st.caption(
+            "The same ATS rules used by Upload CV will compare this JD with "
+            "your form details."
+        )
+        make_clicked = st.form_submit_button(
+            "⚡  Make CV", type="primary", use_container_width=True
+        )
     photo_bytes = profile_photo.getvalue() if profile_photo is not None else None
     if photo_bytes:
         st.caption(
-            "This photo will appear at the top-right of the PDF and Word CV. "
-            "Some ATS software ignore images, so keep the rest of the CV text-based."
+            "The photo appears at the top-right of the PDF and Word CV. "
+            "Some ATS software ignore images, so the rest stays text-based."
         )
-
-    st.markdown("**CV sections** — fill in whichever apply to you")
-    summary = st.text_area(
-        "Professional Summary",
-        key="make_summary",
-        height=90,
-        placeholder="2–4 lines about your background and goal",
-    )
-    skills_text = st.text_area(
-        "Skills",
-        key="make_skills",
-        height=80,
-        placeholder="Python, Java, React, AWS...",
-    )
-    exp_col, proj_col = st.columns(2)
-    with exp_col:
-        experience = st.text_area(
-            "Professional Experience",
-            key="make_experience",
-            height=140,
-            placeholder="Company, role, dates, work done",
-        )
-    with proj_col:
-        projects = st.text_area(
-            "Projects",
-            key="make_projects",
-            height=140,
-            placeholder="Project name, what you built, stack",
-        )
-    edu_col, cert_col = st.columns(2)
-    with edu_col:
-        education = st.text_area(
-            "Education",
-            key="make_education",
-            height=110,
-            placeholder="Degree, college, year",
-        )
-    with cert_col:
-        certifications = st.text_area(
-            "Certifications",
-            key="make_certifications",
-            height=110,
-            placeholder="Certificate name, issuer, year",
-        )
-    intern_col, extra_col, lang_col = st.columns(3)
-    with intern_col:
-        internships = st.text_area(
-            "Internships",
-            key="make_internships",
-            height=90,
-            placeholder="Company, role, dates",
-        )
-    with extra_col:
-        achievements = st.text_area(
-            "Achievements",
-            key="make_achievements",
-            height=90,
-            placeholder="Awards, rankings, highlights",
-        )
-    with lang_col:
-        languages = st.text_area(
-            "Languages",
-            key="make_languages",
-            height=90,
-            placeholder="English, Hindi...",
-        )
-
-    st.markdown("**Give me your all details**")
-    details = st.text_area(
-        "All details",
-        height=180,
-        label_visibility="collapsed",
-        key="make_details",
-        placeholder=(
-            "Extra notes, a company JD, additional skills, college or home "
-            "address — anything missed in the fields above"
-        ),
-    )
-    st.caption(
-        "Note: this box accepts a company JD, extra skills, experience, college "
-        "details, or your home address. Nothing here is mandatory."
-    )
-
     st.caption(
         "Only the layout and section order come from the reference resume — the "
         "content is entirely what you enter. Leave the summary empty and a "
@@ -1220,67 +1949,137 @@ elif screen == "make":
         "experience": experience,
         "projects": projects,
         "education": education,
+        "qualification": qualification,
         "certifications": certifications,
         "internships": internships,
         "achievements": achievements,
         "languages": languages,
         "details": details,
+        "job_description": make_jd,
         "photo": (
             f"{profile_photo.name}:{len(photo_bytes)}" if photo_bytes else ""
         ),
     }
     signature = repr(form_values)
 
-    if st.button("⚡  Make CV", type="primary", key="make_cv_btn"):
-        try:
-            composed = compose_cv_text(
-                name=full_name,
-                email=email,
-                phone=phone,
-                address=address,
-                city=city,
-                state=state,
-                headline=headline,
-                details=details,
-                sections={
-                    "summary": summary,
-                    "skills": skills_text,
-                    "experience": experience,
-                    "projects": projects,
-                    "education": education,
-                    "certifications": certifications,
-                    "internships": internships,
-                    "achievements": achievements,
-                    "languages": languages,
-                },
+    if make_clicked:
+        if len(make_jd.strip()) < 50:
+            st.error(
+                "Please paste the complete target JD (at least 50 characters)."
             )
-            skill_source = "\n".join(
-                [skills_text, experience, projects, details, internships]
-            )
-            st.session_state["manual_generated"] = {
-                "files": build_all_formats(composed, photo_bytes=photo_bytes),
-                "skills": match_jd(composed, skill_source or composed)["matched"],
-                "text": composed,
-                "signature": signature,
-            }
-        except Exception as exc:
-            st.error(str(exc))
+        else:
+            try:
+                composed = compose_cv_text(
+                    name=full_name,
+                    email=email,
+                    phone=phone,
+                    address=address,
+                    city=city,
+                    state=state,
+                    headline=headline,
+                    details=details,
+                    sections={
+                        "summary": summary,
+                        "skills": skills_text,
+                        "experience": experience,
+                        "projects": projects,
+                        "education": education,
+                        "qualification": qualification,
+                        "certifications": certifications,
+                        "internships": internships,
+                        "achievements": achievements,
+                        "languages": languages,
+                    },
+                )
+                with st.spinner(
+                    "Analysing the JD and preparing PDF, DOCX, and XLSX..."
+                ):
+                    st.session_state["manual_ats_source"] = {
+                        "base_text": composed,
+                        "jd_text": make_jd,
+                        "photo_bytes": photo_bytes,
+                        "template": chosen_template,
+                        "signature": signature,
+                        "template_label": chosen_design["label"],
+                    }
+                    st.session_state["manual_generated"] = (
+                        build_manual_jd_result(
+                            composed,
+                            make_jd,
+                            photo_bytes,
+                            chosen_template,
+                            signature,
+                            chosen_design["label"],
+                        )
+                    )
+            except Exception as exc:
+                st.error(str(exc))
 
     manual = st.session_state.get("manual_generated")
-    if manual:
+    manual_source = st.session_state.get("manual_ats_source")
+    if manual and manual_source:
         st.divider()
-        step(2, "Your CV is ready")
+        step(2, "How an ATS will read this CV")
+        if manual.get("template_label"):
+            st.success(f"Template: {manual['template_label']}")
         if manual.get("signature") != signature:
             st.warning(
                 "Your form details have changed. The CV below uses the older "
                 "details — press Make CV again to rebuild it."
             )
-        if manual["skills"]:
-            st.markdown("**Skills detected from your details**")
-            st.markdown(
-                "".join(f'<span class="pill">{s}</span>' for s in manual["skills"]),
-                unsafe_allow_html=True,
+        render_ats_overview(manual)
+
+        match = manual["match"]
+        title = manual["report"]["title"]
+        confirmed_skills: list[str] = []
+        if match["missing"] or title["jd_title"]:
+            st.divider()
+            step(3, "Fix the gaps, then rebuild")
+        if match["missing"]:
+            confirmed_skills = st.multiselect(
+                "Skills the JD wants that are not in your details",
+                options=match["missing"],
+                key="make_confirm_skills",
+                help="Tick only skills you genuinely have.",
             )
+        use_jd_title = False
+        if title["jd_title"] and (title["score"] or 0) < 100:
+            use_jd_title = st.checkbox(
+                f"Set my CV headline to \"{title['jd_title']}\"",
+                key="make_use_jd_title",
+                help="Use only when this truthfully describes your role.",
+            )
+        if match["missing"] or title["jd_title"]:
+            if st.button(
+                "🔁 Rebuild CV with my confirmations",
+                key="make_ats_rebuild",
+                use_container_width=True,
+            ):
+                try:
+                    with st.spinner(
+                        "Rebuilding ATS PDF, DOCX, and XLSX..."
+                    ):
+                        st.session_state["manual_generated"] = (
+                            build_manual_jd_result(
+                                manual_source["base_text"],
+                                manual_source["jd_text"],
+                                manual_source["photo_bytes"],
+                                manual_source["template"],
+                                manual_source["signature"],
+                                manual_source["template_label"],
+                                extra_skills=confirmed_skills,
+                                headline=(
+                                    title["jd_title"]
+                                    if use_jd_title
+                                    else None
+                                ),
+                            )
+                        )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
+
+        st.divider()
         with st.expander("Preview CV content — confirm every detail is included"):
             st.text(manual.get("text", ""))
         if st.button("⬇  Choose Download Format", type="primary", key="make_download"):
@@ -1289,7 +2088,7 @@ elif screen == "make":
     exit_button("exit_make")
 
 
-if st.session_state.get("cv_ready") and screen in {"upload", "existing"}:
+if st.session_state.get("cv_ready") and screen == "existing":
     meta = st.session_state["cv_meta"]
     st.divider()
     step(2, "Paste the job description")
@@ -1308,46 +2107,86 @@ if st.session_state.get("cv_ready") and screen in {"upload", "existing"}:
         if len(jd.strip()) < 50:
             st.error("Please paste the complete JD (at least 50 characters).")
         else:
-            match = match_jd(st.session_state["cv_text"], jd)
-            tailored = build_tailored_text(st.session_state["cv_text"], match)
-            st.session_state["generated"] = {
-                "match": match,
-                "files": build_all_formats(tailored),
-                "text": tailored,
-            }
+            try:
+                with st.spinner("Analysing CV, JD and AI suggestions..."):
+                    st.session_state["existing_ats_source"] = {
+                        "cv_text": st.session_state["cv_text"],
+                        "jd_text": jd,
+                        "name": meta.get("original_name", "Existing_CV.pdf"),
+                    }
+                    st.session_state["generated"] = build_upload_docx(
+                        st.session_state["cv_text"],
+                        jd,
+                        meta.get("original_name", "Existing_CV.pdf"),
+                        ai_settings=st.session_state.get("ai_settings"),
+                    )
+            except Exception as exc:
+                st.error(str(exc))
 
     generated = st.session_state.get("generated")
-    if generated and "files" in generated:
-        match = generated["match"]
+    existing_source = st.session_state.get("existing_ats_source")
+    if generated and existing_source and "data" in generated:
         st.divider()
-        step(3, "Your CV is ready")
-        col1, col2 = st.columns(2)
-        col1.metric("JD skill match", f"{match['score']}%")
-        col2.metric("Verified skills", len(match["matched"]))
+        step(3, "How an ATS will read this CV")
+        render_ats_overview(generated)
 
-        if match["matched"]:
-            st.markdown("**Matched from your CV**")
-            st.markdown(
-                "".join(f'<span class="pill">{s}</span>' for s in match["matched"]),
-                unsafe_allow_html=True,
-            )
+        match = generated["match"]
+        title = generated["report"]["title"]
+        confirmed_skills: list[str] = []
+        if match["missing"] or title["jd_title"]:
+            st.divider()
+            step(4, "Fix the gaps, then rebuild")
         if match["missing"]:
-            st.warning(
-                "Required by the JD but not verified in your CV: "
-                + ", ".join(match["missing"])
-                + " — these skills were not added to the CV."
+            confirmed_skills = st.multiselect(
+                "Skills the JD wants that are not in your saved CV",
+                options=match["missing"],
+                key="existing_confirm_skills",
+                help="Tick only skills you genuinely have.",
             )
-        if not match["requested"]:
-            st.info(
-                "No known technical skills were identified in the JD. Your "
-                "original CV was converted into an ATS-friendly one-column PDF."
+        use_jd_title = False
+        if title["jd_title"] and (title["score"] or 0) < 100:
+            use_jd_title = st.checkbox(
+                f"Set my CV headline to \"{title['jd_title']}\"",
+                key="existing_use_jd_title",
+                help="Use only when your actual role matches this title.",
             )
+        if match["missing"] or title["jd_title"]:
+            if st.button(
+                "🔁 Rebuild saved CV with my confirmations",
+                key="existing_rebuild",
+                use_container_width=True,
+            ):
+                try:
+                    with st.spinner("Rebuilding your ATS DOCX..."):
+                        st.session_state["generated"] = build_upload_docx(
+                            existing_source["cv_text"],
+                            existing_source["jd_text"],
+                            existing_source["name"],
+                            extra_skills=confirmed_skills,
+                            headline=(
+                                title["jd_title"] if use_jd_title else None
+                            ),
+                            ai_settings=st.session_state.get("ai_settings"),
+                        )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(str(exc))
 
-        with st.expander("Preview CV content"):
+        st.divider()
+        with st.expander("Preview ATS CV content"):
             st.text(generated.get("text", ""))
-
-        if st.button("⬇  Choose Download Format", type="primary"):
-            download_format_dialog(generated)
+        st.download_button(
+            "⬇ Download ATS DOCX",
+            data=generated["data"],
+            file_name=generated["filename"],
+            mime=(
+                "application/vnd.openxmlformats-officedocument."
+                "wordprocessingml.document"
+            ),
+            type="primary",
+            use_container_width=True,
+            key="existing_docx_download",
+        )
 
 st.divider()
 st.markdown(

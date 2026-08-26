@@ -27,7 +27,7 @@ jobs:
       - name: Copy app files into the published folder
         run: |
           mkdir -p docs/assets docs/profile
-          cp app.py cv_engine.py docs/
+          cp app.py cv_engine.py ai_providers.py docs/
           cp assets/owner_photo.jpg docs/assets/
           cp profile/Satyam_Dev_Resume_ATS.pdf docs/profile/
       - uses: actions/upload-pages-artifact@v3

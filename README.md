@@ -11,15 +11,16 @@ App khulte hi PIN popup aata hai. PIN: **6932** (hardcoded in `app.py` as `APP_P
 0. **Dark / Light mode** toggle top-right, aur har screen par **Exit to Front Page** button.
 1. **Upload CV** — koi bhi selectable-text PDF upload karo (DevOps, Python, Java, etc.).
 2. CV text local files mein save hota hai.
-3. **Existing CV** — saved CV continue ya change karo.
+3. **Existing CV** — saved CV continue/change karo aur Upload CV wala complete
+   JD + ATS score + AI/fallback + truthful rebuild workflow use karo.
 4. Complete JD paste karo.
 5. App CV aur JD mein common verified skills detect karti hai.
 6. Attractive ATS-safe one-column layout: readable Arial/Helvetica fonts, blue
    section headings, clean spacing, no columns/icons/tables.
 7. Download popup se **PDF**, **DOCX**, ya **XLSX** choose karo.
-8. **Make your CV** — bina purana CV ke, form (name, email, number, address) aur
-   ek details box se naya ATS CV banao. Details box mein skills, experience,
-   education, address ya company ka JD — kuch bhi daal sakte ho.
+8. **Make your CV** — bina purana CV ke form se naya CV banao, target JD paste
+   karo, aur wahi complete ATS score + AI/fallback + truthful confirmation
+   workflow use karo. Output PDF, DOCX aur XLSX mein milta hai.
 9. Reference resume sirf **layout aur heading order** ke liye use hota hai —
    content sirf tumhari di hui details ka rehta hai, kisi doosre CV se nahi.
 10. Kam details do to bhi CV professional banta hai: role + skills se
@@ -40,6 +41,10 @@ App khulte hi PIN popup aata hai. PIN: **6932** (hardcoded in `app.py` as `APP_P
     truthful wording use hoti hai; CV ke bahar ki skill/experience add nahi hoti.
 15. Sidebar ke **Settings** page par Log out button session lock karke PIN screen
     par wapas le jaata hai.
+16. Top-right **AI** button password `6932AI` se provider settings kholta hai.
+    Ollama local-first hai; failure par configured Gemini aur Groq free-tier
+    providers try ho sakte hain. Cloud API keys sirf current session memory mein
+    rehti hain aur logout par clear ho jaati hain.
 
 Har generated CV `profile/Satyam_Dev_Resume_ATS.pdf` ke reference layout ko follow
 karta hai: Name → Role → Contact → SUMMARY → SKILLS → JD-MATCHED SKILLS →
@@ -54,6 +59,29 @@ backend, mobile, data/AI, testing aur security technologies cover karti hai.
 
 App skills ya experience invent nahi karti. JD mein jo requirement hai lekin uploaded
 CV mein verify nahi hoti, woh missing list mein dikhayi jaati hai.
+
+## Free AI providers
+
+Upload CV flow deterministic ATS checks ke baad optional AI wording suggestions
+use karta hai. Default provider chain:
+
+1. **Ollama** — free/local, CV computer se bahar nahi jaata.
+2. **Gemini** — free tier; API key AI settings dialog mein enter karo.
+3. **Groq** — free tier; API key AI settings dialog mein enter karo.
+
+Ollama ke liye [Ollama](https://ollama.com/) install karke model pull aur server
+start karo:
+
+```powershell
+ollama pull llama3.2:3b
+ollama serve
+```
+
+Provider settings ka password: **6932AI**. Yeh password public source code mein
+hardcoded hai, isliye real security boundary nahi hai. Gemini/Groq select ya
+fallback hone par uploaded CV aur JD us cloud provider ko bheje jaate hain.
+Missing JD skills AI khud add nahi karti; user ko pehle unhe truthful confirmation
+list mein tick karna padta hai.
 
 ## GitHub se clone karke run
 
@@ -139,6 +167,8 @@ nahi hai.
 
 ## Important limitation
 
-Yeh offline deterministic app hai, generative AI nahi. Yeh uploaded CV ko readable
-ATS PDF banati hai aur JD/CV ke truthful matching keywords prioritize karti hai.
-Deep sentence rewriting ke liye external AI API ki zaroorat hogi.
+Ollama sirf local Streamlit run par `localhost:11434` se accessible hota hai.
+Streamlit Cloud par Gemini/Groq configure karo. GitHub Pages ka stlite/browser
+build browser networking aur CORS restrictions ki wajah se local Ollama access
+reliably nahi kar sakta. AI unavailable ho tab bhi deterministic ATS matching aur
+DOCX generation chalti rehti hai.

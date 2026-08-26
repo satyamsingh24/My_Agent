@@ -6,6 +6,7 @@ import json
 import re
 import secrets
 from datetime import datetime
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
@@ -16,15 +17,23 @@ from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from pypdf import PdfReader
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import Image as RLImage
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    HRFlowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 from PIL import Image as PILImage
+from PIL import ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "app_data"
@@ -32,6 +41,295 @@ CV_PDF = DATA_DIR / "existing_cv.pdf"
 CV_TEXT = DATA_DIR / "existing_cv.txt"
 CV_META = DATA_DIR / "existing_cv.json"
 OUTPUT_DIR = ROOT / "applications" / "generated"
+
+CV_TEMPLATES = {
+    "reference": {
+        "label": "Reference Black & White",
+        "description": (
+            "Exact layout of the supplied reference CV: no colour, ruled "
+            "headings, and tight spacing."
+        ),
+        "primary": "000000",
+        "accent": "000000",
+        "heading_fill": "FFFFFF",
+        "heading_text": "000000",
+        "ruled_headings": True,
+        "compact": True,
+    },
+    "modern": {
+        "label": "Modern Blue",
+        "description": "A fresh blue design with softly highlighted section headings.",
+        "primary": "155E75",
+        "accent": "0E7490",
+        "heading_fill": "DDF3F7",
+        "heading_text": "155E75",
+        "ruled_headings": False,
+        "compact": False,
+    },
+    "minimal": {
+        "label": "Clean Minimal",
+        "description": "A restrained charcoal design for a simple corporate CV.",
+        "primary": "20242C",
+        "accent": "4B5563",
+        "heading_fill": "E7E9ED",
+        "heading_text": "20242C",
+        "ruled_headings": False,
+        "compact": False,
+    },
+    "classic_navy": {
+        "label": "Classic Navy",
+        "description": "Traditional navy headings for finance, consulting, and corporate roles.",
+        "primary": "172554",
+        "accent": "1E3A8A",
+        "heading_fill": "E8EEF9",
+        "heading_text": "172554",
+        "ruled_headings": True,
+        "compact": False,
+    },
+    "executive_maroon": {
+        "label": "Executive Maroon",
+        "description": "A confident maroon design suited to senior and leadership profiles.",
+        "primary": "701A2C",
+        "accent": "9F1239",
+        "heading_fill": "FCE7EC",
+        "heading_text": "701A2C",
+        "ruled_headings": False,
+        "compact": True,
+    },
+    "forest": {
+        "label": "Forest Professional",
+        "description": "Calm forest-green accents with clear, compact section bands.",
+        "primary": "14532D",
+        "accent": "15803D",
+        "heading_fill": "E5F5EA",
+        "heading_text": "14532D",
+        "ruled_headings": False,
+        "compact": True,
+    },
+    "slate": {
+        "label": "Slate Technical",
+        "description": "Sharp slate styling for engineering, DevOps, and technical roles.",
+        "primary": "1E293B",
+        "accent": "475569",
+        "heading_fill": "E2E8F0",
+        "heading_text": "1E293B",
+        "ruled_headings": True,
+        "compact": True,
+    },
+    "royal_purple": {
+        "label": "Royal Purple",
+        "description": "A polished purple layout for product, design, and technology roles.",
+        "primary": "581C87",
+        "accent": "7E22CE",
+        "heading_fill": "F3E8FF",
+        "heading_text": "581C87",
+        "ruled_headings": False,
+        "compact": False,
+    },
+    "teal_compact": {
+        "label": "Teal Compact",
+        "description": "Space-efficient teal styling for candidates with detailed experience.",
+        "primary": "134E4A",
+        "accent": "0F766E",
+        "heading_fill": "DDF4F1",
+        "heading_text": "134E4A",
+        "ruled_headings": True,
+        "compact": True,
+    },
+    "warm_gray": {
+        "label": "Warm Gray",
+        "description": "A neutral, understated format suitable for every professional domain.",
+        "primary": "292524",
+        "accent": "57534E",
+        "heading_fill": "EDEAE7",
+        "heading_text": "292524",
+        "ruled_headings": False,
+        "compact": False,
+    },
+}
+
+
+def cv_template(template: str) -> dict[str, str]:
+    """Return a supported CV template, falling back to the reference design."""
+    return CV_TEMPLATES.get(template, CV_TEMPLATES["reference"])
+
+
+# Preview thumbnails try a real font first, then Pillow's built-in font so the
+# picker also works in the browser build where system fonts are missing.
+PREVIEW_FONTS = {
+    False: (
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/Library/Fonts/Arial.ttf",
+    ),
+    True: (
+        "C:/Windows/Fonts/arialbd.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/Library/Fonts/Arial Bold.ttf",
+    ),
+}
+
+
+@lru_cache(maxsize=16)
+def _preview_font(size: int, bold: bool = False):
+    for path in PREVIEW_FONTS[bold]:
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            continue
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+@lru_cache(maxsize=16)
+def _font_at(path: str, size: int):
+    return ImageFont.truetype(path, size)
+
+
+@lru_cache(maxsize=4096)
+def _cached_width(text: str, path: str, size: int) -> float:
+    return _font_at(path, size).getlength(text)
+
+
+@lru_cache(maxsize=16)
+def _wide_char_width(path: str, size: int) -> float:
+    """Width of the widest common character, used to skip exact measuring."""
+    font = _font_at(path, size)
+    return max(font.getlength(char) for char in "WM@%_")
+
+
+def _text_width(text: str, font) -> float:
+    """Glyph width of `text`, cached because font measuring is slow."""
+    path = getattr(font, "path", None)
+    size = getattr(font, "size", None)
+    if not isinstance(path, str) or not isinstance(size, int):
+        return font.getlength(text)
+    return _cached_width(text, path, size)
+
+
+def _certainly_fits(text: str, font, limit: float) -> bool:
+    """True when even all-wide glyphs would fit, so no measuring is needed."""
+    path = getattr(font, "path", None)
+    size = getattr(font, "size", None)
+    if not isinstance(path, str) or not isinstance(size, int):
+        return False
+    return len(text) * _wide_char_width(path, size) <= limit
+
+
+def _fit_preview_text(text: str, font, limit: float) -> str:
+    """Shorten text to `limit` pixels using few (slow) width measurements."""
+    if _certainly_fits(text, font, limit):
+        return text
+    width = _text_width(text, font)
+    if width <= limit:
+        return text
+    keep = max(0, min(len(text) - 1, int(len(text) * limit / width) - 1))
+    while keep and _text_width(text[:keep] + "...", font) > limit:
+        keep -= max(1, keep // 8)
+    while keep < len(text) - 1 and _text_width(text[:keep + 1] + "...", font) <= limit:
+        keep += 1
+    return (text[:keep] + "...") if keep else ""
+
+
+def build_template_preview(text: str, template: str, width: int = 430) -> bytes:
+    """Render a small page thumbnail so a template can be judged before use."""
+    design = cv_template(template)
+    height = int(width * 1.414)
+    image = PILImage.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+    draw.rectangle([(0, 0), (width - 1, height - 1)], outline="#D8DCE8")
+
+    primary = "#" + design["primary"]
+    accent = "#" + design["accent"]
+    heading_fill = "#" + design["heading_fill"]
+    heading_text = "#" + design["heading_text"]
+
+    margin = int(width * 0.06)
+    inner = width - 2 * margin
+    name_font = _preview_font(max(13, int(width * 0.048)), bold=True)
+    role_font = _preview_font(max(9, int(width * 0.030)), bold=True)
+    heading_font = _preview_font(max(8, int(width * 0.026)), bold=True)
+    entry_font = _preview_font(max(7, int(width * 0.024)), bold=True)
+    body_font = _preview_font(max(7, int(width * 0.023)))
+
+    y = margin
+    section = ""
+    nonempty_seen = 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if y > height - margin:
+            break
+        if not line:
+            y += 4
+            continue
+        upper = line.upper().rstrip(":")
+        if nonempty_seen == 0:
+            body = _fit_preview_text(line, name_font, inner)
+            draw.text((margin, y), body, font=name_font, fill=primary)
+            y += name_font.size + 6
+        elif nonempty_seen == 1 and line == upper and len(line.split()) <= 6:
+            body = _fit_preview_text(line, role_font, inner)
+            draw.text((margin, y), body, font=role_font, fill=accent)
+            y += role_font.size + 5
+        elif upper in SECTION_HEADINGS:
+            section = HEADING_ALIASES.get(upper, upper)
+            if design.get("ruled_headings"):
+                draw.text(
+                    (margin, y),
+                    _fit_preview_text(upper, heading_font, inner),
+                    font=heading_font,
+                    fill=heading_text,
+                )
+                y += heading_font.size + 3
+                draw.line(
+                    [(margin, y), (width - margin, y)], fill="#000000", width=1
+                )
+                y += 4
+            else:
+                band = heading_font.size + 8
+                draw.rectangle(
+                    [(margin, y), (width - margin, y + band)], fill=heading_fill
+                )
+                draw.text(
+                    (margin + 5, y + 4),
+                    _fit_preview_text(upper, heading_font, inner - 10),
+                    font=heading_font,
+                    fill=heading_text,
+                )
+                y += band + 5
+        elif line.startswith(("-", "*", "\u2022")):
+            body = "\u2022 " + line.lstrip("-*\u2022 ").strip()
+            draw.text(
+                (margin + 6, y),
+                _fit_preview_text(body, body_font, inner - 6),
+                font=body_font,
+                fill="#4A5060",
+            )
+            y += body_font.size + 4
+        elif section and section not in PROSE_SECTIONS:
+            draw.text(
+                (margin, y),
+                _fit_preview_text(line, entry_font, inner),
+                font=entry_font,
+                fill="#1F2437",
+            )
+            y += entry_font.size + 4
+        else:
+            draw.text(
+                (margin, y),
+                _fit_preview_text(line, body_font, inner),
+                font=body_font,
+                fill="#4A5060",
+            )
+            y += body_font.size + 4
+        nonempty_seen += 1
+
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
+
 
 SKILLS = [
     "AWS", "GCP", "Azure", "GitHub Actions", "Infrastructure as Code",
@@ -67,6 +365,8 @@ SECTION_HEADINGS = {
     "PROFESSIONAL EXPERIENCE", "PROJECTS", "EDUCATION", "CERTIFICATIONS",
     "CERTIFICATES", "ACHIEVEMENTS", "LANGUAGES", "INTERNSHIP", "INTERNSHIPS",
     "CORE COMPETENCIES", "KEY COMPETENCIES", "AREAS OF EXPERTISE",
+    "JD-MATCHED SKILLS", "ADDITIONAL DETAILS", "QUALIFICATION",
+    "QUALIFICATIONS", "ACADEMIC QUALIFICATION", "ACADEMIC QUALIFICATIONS",
 }
 
 # Canonical structure copied from profile/Satyam_Dev_Resume_ATS.pdf so every
@@ -90,6 +390,10 @@ HEADING_ALIASES = {
     "INTERNSHIPS": "INTERNSHIPS",
     "PROJECTS": "PROJECTS",
     "EDUCATION": "EDUCATION",
+    "QUALIFICATION": "QUALIFICATION",
+    "QUALIFICATIONS": "QUALIFICATION",
+    "ACADEMIC QUALIFICATION": "QUALIFICATION",
+    "ACADEMIC QUALIFICATIONS": "QUALIFICATION",
     "CERTIFICATIONS": "CERTIFICATIONS",
     "CERTIFICATES": "CERTIFICATIONS",
     "ACHIEVEMENTS": "ACHIEVEMENTS",
@@ -106,6 +410,7 @@ REFERENCE_ORDER = [
     "INTERNSHIPS",
     "PROJECTS",
     "EDUCATION",
+    "QUALIFICATION",
     "CERTIFICATIONS",
     "ACHIEVEMENTS",
     "LANGUAGES",
@@ -117,6 +422,15 @@ DROP_HEADINGS = {"DECLARATION", "REFERENCES", "DECLARATION:"}
 
 # Sections whose plain lines are prose, not company/degree entry lines.
 PROSE_SECTIONS = {"SUMMARY", "SKILLS", "JD-MATCHED SKILLS", "LANGUAGES"}
+
+# Sections built from entries (company/degree line + description lines).
+ENTRY_SECTIONS = {
+    "PROFESSIONAL EXPERIENCE", "INTERNSHIPS", "PROJECTS", "EDUCATION",
+    "QUALIFICATION", "CERTIFICATIONS",
+}
+
+# Sections that read best as a plain bullet list.
+BULLET_SECTIONS = {"ACHIEVEMENTS", "CORE COMPETENCIES", "ADDITIONAL DETAILS"}
 
 # Skill buckets used to print a grouped, recruiter-friendly SKILLS block.
 SKILL_GROUPS: list[tuple[str, tuple[str, ...]]] = [
@@ -330,8 +644,119 @@ def _contains(text: str, term: str) -> bool:
     )
 
 
-def match_jd(cv_text: str, jd_text: str) -> dict:
-    requested = [skill for skill in SKILLS if _contains(jd_text, skill)]
+# Words that fill every JD but never describe a hiring skill.
+JD_NOISE_WORDS = {
+    "a", "an", "and", "the", "of", "in", "on", "with", "for", "to", "or", "as",
+    "at", "by", "from", "is", "are", "be", "will", "must", "should", "can",
+    "have", "having", "using", "use", "used", "such", "including", "include",
+    "includes", "etc", "we", "you", "your", "our", "their", "this", "that",
+    "these", "those", "per", "across", "within", "other", "various", "multiple",
+    "new", "experience", "experiences", "knowledge", "understanding", "strong",
+    "good", "excellent", "ability", "abilities", "skill", "skills", "proficient",
+    "proficiency", "familiarity", "familiar", "expertise", "exposure", "hands",
+    "year", "years", "yrs", "minimum", "plus", "preferred", "required",
+    "requirement", "requirements", "responsibility", "responsibilities",
+    "candidate", "candidates", "role", "roles", "team", "teams", "work",
+    "working", "works", "company", "business", "project", "projects",
+    "development", "developing", "design", "designing", "support", "supporting",
+    "solution", "solutions", "product", "products", "service", "services",
+    "client", "clients", "customer", "customers", "stakeholder", "stakeholders",
+    "communication", "collaboration", "teamwork", "leadership", "problem",
+    "solving", "written", "verbal", "interpersonal", "attention", "detail",
+    "fast", "paced", "environment", "degree", "bachelor", "bachelors", "master",
+    "masters", "field", "related", "equivalent", "job", "description",
+    "position", "opportunity", "apply", "join", "looking", "seeking", "ideal",
+    "successful", "applicant", "nice", "must-have", "location", "notice",
+    "period", "salary", "ctc", "immediate", "joiner", "shift", "office",
+}
+
+# Acronyms that look technical but are just English in caps.
+ACRONYM_NOISE = {
+    "AND", "OR", "THE", "FOR", "WITH", "YOU", "WE", "OUR", "ALL", "NEW", "JOB",
+    "CV", "HR", "JD", "US", "UK", "USA", "EU", "AM", "PM", "OK", "NOT", "ARE",
+    "WILL", "CAN", "MUST", "ANY", "ONE", "TWO", "PER", "CTC", "LPA", "WFH",
+    "WFO", "NA", "N/A", "MS", "BE", "BS", "MBA", "BCA", "MCA", "BTECH", "MTECH",
+}
+
+# Phrases that introduce a list of real skills in a JD.
+JD_CUE_RE = re.compile(
+    r"(?:experience\s+(?:with|in|on|of)|hands[- ]on\s+(?:experience\s+)?"
+    r"(?:with|in)?|knowledge\s+of|proficien(?:t|cy)\s+(?:in|with)|"
+    r"expertise\s+(?:in|with)|familiarity\s+with|exposure\s+to|"
+    r"working\s+knowledge\s+of|skills?\s*[:\-]|technologies\s*[:\-]|"
+    r"tech\s*stack\s*[:\-]|stack\s*[:\-]|tools?\s*[:\-]|must\s*have\s*[:\-]?|"
+    r"good\s*to\s*have\s*[:\-]?)",
+    re.IGNORECASE,
+)
+
+DOTTED_TECH_RE = re.compile(
+    r"\b[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9]+)+\b|\bC\+\+|\bC#|\bF#"
+)
+ACRONYM_RE = re.compile(r"\b[A-Z][A-Z0-9+#/]{1,7}\b")
+MAX_JD_KEYWORDS = 30
+
+
+def _clean_keyword(phrase: str) -> str:
+    """Trim a raw JD fragment down to a usable skill phrase."""
+    text = re.sub(r"\([^)]*\)", " ", phrase)
+    text = re.sub(r"[^A-Za-z0-9+#./ -]", " ", text)
+    text = re.sub(r"\s+", " ", text).strip(" -.")
+    if not text:
+        return ""
+    words = text.split()
+    while words and words[0].lower() in JD_NOISE_WORDS:
+        words.pop(0)
+    while words and words[-1].lower() in JD_NOISE_WORDS:
+        words.pop()
+    if not words or len(words) > 3 or len(" ".join(words)) > 30:
+        return ""
+    if all(word.lower() in JD_NOISE_WORDS for word in words):
+        return ""
+    if not any(char.isalpha() for char in " ".join(words)):
+        return ""
+    return " ".join(words)
+
+
+def extract_jd_keywords(jd_text: str) -> list[str]:
+    """Pull skill terms out of a JD, including ones outside the built-in list."""
+    found: list[str] = []
+
+    for cue in JD_CUE_RE.finditer(jd_text):
+        tail = jd_text[cue.end():]
+        tail = re.split(r"[.;\n]", tail, maxsplit=1)[0]
+        for fragment in re.split(r",|/|\||&|\band\b|\bor\b", tail, flags=re.I):
+            keyword = _clean_keyword(fragment)
+            if keyword:
+                found.append(keyword)
+
+    for token in DOTTED_TECH_RE.findall(jd_text):
+        keyword = _clean_keyword(token)
+        if keyword:
+            found.append(keyword)
+
+    for token in ACRONYM_RE.findall(jd_text):
+        if token in ACRONYM_NOISE or token.lower() in JD_NOISE_WORDS:
+            continue
+        found.append(token)
+
+    ranked = sorted(
+        _dedupe(found),
+        key=lambda word: -len(re.findall(
+            r"(?<!\w)" + re.escape(word) + r"(?!\w)", jd_text, re.IGNORECASE
+        )),
+    )
+    return ranked[:MAX_JD_KEYWORDS]
+
+
+def match_jd(cv_text: str, jd_text: str, include_dynamic: bool = True) -> dict:
+    known = [skill for skill in SKILLS if _contains(jd_text, skill)]
+    requested = list(known)
+    if include_dynamic:
+        seen = {skill.casefold() for skill in known}
+        for keyword in extract_jd_keywords(jd_text):
+            if keyword.casefold() not in seen:
+                seen.add(keyword.casefold())
+                requested.append(keyword)
     present = [skill for skill in requested if _contains(cv_text, skill)]
     missing = [skill for skill in requested if skill not in present]
     score = round(100 * len(present) / len(requested)) if requested else 0
@@ -354,16 +779,300 @@ def _dedupe(items: list[str]) -> list[str]:
     return result
 
 
-def build_tailored_text(cv_text: str, match: dict) -> str:
-    """Preserve source CV, add truthful JD keywords, and apply reference layout."""
-    matched = match["matched"]
-    keyword_line = (
-        ", ".join(matched)
-        if matched
-        else "No verified JD keywords found in the uploaded CV."
+ROLE_PHRASE_RE = re.compile(
+    r"\b((?:[A-Za-z+#./]+[ -]){0,3}(?:developer|engineer|analyst|administrator"
+    r"|architect|consultant|manager|specialist|designer|tester|programmer"
+    r"|scientist|intern|trainee))\b",
+    re.IGNORECASE,
+)
+JD_TITLE_LINE_RE = re.compile(
+    r"^\s*(?:job\s*title|job\s*role|role|position|designation)\s*[:\-]\s*(.+)$",
+    re.IGNORECASE | re.MULTILINE,
+)
+JD_TITLE_CUE_RE = re.compile(
+    r"(?:hiring for|looking for|seeking|position of|role of|we need)\s+"
+    r"(?:an?\s+)?([A-Za-z+#./ -]{3,60})",
+    re.IGNORECASE,
+)
+# Seniority words that should not decide whether two titles match.
+TITLE_NOISE = {
+    "senior", "junior", "sr", "jr", "lead", "principal", "staff", "associate",
+    "i", "ii", "iii", "iv", "1", "2", "3", "fresher", "entry", "level",
+}
+
+
+def _role_phrase(text: str) -> str:
+    match = ROLE_PHRASE_RE.search(text)
+    return re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+
+
+def jd_role_title(jd_text: str) -> str:
+    """Best guess at the job title the JD is hiring for."""
+    line_match = JD_TITLE_LINE_RE.search(jd_text)
+    if line_match:
+        candidate = _role_phrase(line_match.group(1)) or line_match.group(1)
+        return re.sub(r"\s+", " ", candidate).strip()[:60]
+    cue_match = JD_TITLE_CUE_RE.search(jd_text)
+    if cue_match:
+        candidate = _role_phrase(cue_match.group(1))
+        if candidate:
+            return candidate
+    for line in [row.strip() for row in jd_text.splitlines() if row.strip()][:6]:
+        candidate = _role_phrase(line)
+        if candidate:
+            return candidate
+    return ""
+
+
+def cv_role_title(cv_text: str) -> str:
+    """Role headline already present in the CV."""
+    return _cv_identity(cv_text)[1]
+
+
+def _title_tokens(title: str) -> set[str]:
+    words = re.findall(r"[A-Za-z+#.]+", title.lower())
+    return {word for word in words if word not in TITLE_NOISE}
+
+
+def title_alignment(cv_text: str, jd_text: str) -> dict:
+    """Compare the CV headline with the JD title, an ATS ranking signal."""
+    jd_title = jd_role_title(jd_text)
+    cv_title = cv_role_title(cv_text)
+    jd_tokens = _title_tokens(jd_title)
+    cv_tokens = _title_tokens(cv_title)
+    if not jd_tokens:
+        return {"jd_title": jd_title, "cv_title": cv_title, "score": None}
+    if not cv_tokens:
+        return {"jd_title": jd_title, "cv_title": cv_title, "score": 0}
+    overlap = jd_tokens & cv_tokens
+    return {
+        "jd_title": jd_title,
+        "cv_title": cv_title,
+        "score": round(100 * len(overlap) / len(jd_tokens)),
+    }
+
+
+YEAR_REQUIREMENT_RE = re.compile(
+    r"(\d{1,2})\s*(?:\+|plus)?\s*(?:[-\u2013]|to)?\s*(?:\d{1,2})?\s*\+?\s*"
+    r"(?:years?|yrs?)",
+    re.IGNORECASE,
+)
+MONTH_INDEX = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7,
+    "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+DATE_POINT = (
+    r"(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s*,?\s*)?"
+    r"(?:\d{1,2}[/-])?(?:19|20)\d{2}"
+)
+DATE_RANGE_RE = re.compile(
+    rf"({DATE_POINT})\s*(?:[-\u2013\u2014]|to|till|until)\s*"
+    rf"(present|current|now|till date|{DATE_POINT})",
+    re.IGNORECASE,
+)
+
+
+def jd_required_years(jd_text: str) -> int | None:
+    """Minimum years of experience the JD asks for, if it states any."""
+    values = [
+        int(match.group(1))
+        for match in YEAR_REQUIREMENT_RE.finditer(jd_text)
+        if 0 < int(match.group(1)) <= 30
+    ]
+    return max(values) if values else None
+
+
+def _month_number(token: str) -> int | None:
+    token = token.strip().lower()
+    if not token:
+        return None
+    month = 1
+    month_word = re.search(r"[a-z]{3}", token)
+    if month_word:
+        month = MONTH_INDEX.get(month_word.group(0), 1)
+    elif re.match(r"^\d{1,2}[/-]", token):
+        month = int(re.split(r"[/-]", token)[0])
+    year_match = re.search(r"(19|20)\d{2}", token)
+    if not year_match:
+        return None
+    return int(year_match.group(0)) * 12 + max(1, min(12, month))
+
+
+def cv_experience_years(cv_text: str) -> float:
+    """Total professional months in the CV, overlapping roles counted once."""
+    _, sections, _ = parse_cv_sections(cv_text)
+    text = "\n".join(
+        sections.get("PROFESSIONAL EXPERIENCE", [])
+        + sections.get("INTERNSHIPS", [])
     )
-    combined = cv_text.rstrip() + "\n\nJD-MATCHED SKILLS\n" + keyword_line + "\n"
-    return restructure_to_reference(combined)
+    now = datetime.now()
+    today = now.year * 12 + now.month
+    spans: list[tuple[int, int]] = []
+    for match in DATE_RANGE_RE.finditer(text):
+        start = _month_number(match.group(1))
+        end_token = match.group(2).lower()
+        end = (
+            today
+            if end_token in {"present", "current", "now", "till date"}
+            else _month_number(end_token)
+        )
+        if start and end and end >= start:
+            spans.append((start, min(end, today)))
+
+    total = 0
+    last_end = 0
+    for start, end in sorted(spans):
+        start = max(start, last_end)
+        if end > start:
+            total += end - start
+            last_end = end
+    return round(total / 12, 1)
+
+
+def ats_report(cv_text: str, jd_text: str, match: dict | None = None) -> dict:
+    """Score a CV the way a hiring ATS does: skills, title, tenure, format."""
+    match = match or match_jd(cv_text, jd_text)
+    title = title_alignment(cv_text, jd_text)
+    required_years = jd_required_years(jd_text)
+    have_years = cv_experience_years(cv_text)
+
+    _, sections, _ = parse_cv_sections(cv_text)
+    format_checks = {
+        "Email address": bool(re.search(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}", cv_text)),
+        "Phone number": bool(re.search(r"(?<!\d)(?:\+?\d[\d ()-]{7,}\d)(?!\d)", cv_text)),
+        "Summary section": bool(sections.get("SUMMARY")),
+        "Skills section": bool(sections.get("SKILLS")),
+        "Experience or projects": bool(
+            sections.get("PROFESSIONAL EXPERIENCE")
+            or sections.get("INTERNSHIPS")
+            or sections.get("PROJECTS")
+        ),
+        "Education section": bool(
+            sections.get("EDUCATION") or sections.get("QUALIFICATION")
+        ),
+    }
+    format_score = round(
+        100 * sum(format_checks.values()) / len(format_checks)
+    )
+
+    years_score = None
+    if required_years:
+        years_score = min(100, round(100 * have_years / required_years))
+
+    parts = [(match["score"], 45), (format_score, 20)]
+    if title["score"] is not None:
+        parts.append((title["score"], 20))
+    if years_score is not None:
+        parts.append((years_score, 15))
+    weight = sum(share for _, share in parts)
+    overall = round(sum(value * share for value, share in parts) / weight)
+
+    suggestions: list[str] = []
+    if match["missing"]:
+        suggestions.append(
+            "The JD asks for "
+            + ", ".join(match["missing"][:8])
+            + ". Tick only the ones you genuinely have so they can be added."
+        )
+    if title["score"] is not None and title["score"] < 60 and title["jd_title"]:
+        suggestions.append(
+            f"The JD hires a \"{title['jd_title']}\" but your CV headline reads "
+            f"\"{title['cv_title'] or 'no clear role'}\". Match the headline if "
+            "the role really is the same."
+        )
+    if required_years and have_years + 0.5 < required_years:
+        suggestions.append(
+            f"The JD wants about {required_years} years and your CV dates add up "
+            f"to {have_years}. Write clear month-year ranges for every role."
+        )
+    for label, ok in format_checks.items():
+        if not ok:
+            suggestions.append(f"{label} is missing — ATS parsers look for it.")
+
+    return {
+        "overall": overall,
+        "skills_score": match["score"],
+        "title": title,
+        "required_years": required_years,
+        "cv_years": have_years,
+        "years_score": years_score,
+        "format_score": format_score,
+        "format_checks": format_checks,
+        "suggestions": suggestions,
+    }
+
+
+def _prioritise_entry_bullets(lines: list[str], keywords: list[str]) -> list[str]:
+    """Within each role, list JD-relevant bullets first; keep roles in order."""
+    if not keywords:
+        return lines
+    groups: list[list[str]] = []
+    for line in lines:
+        if line.startswith(("-", "*", "\u2022")) and groups:
+            groups[-1].append(line)
+        else:
+            groups.append([line])
+
+    ordered: list[str] = []
+    for group in groups:
+        head, bullets = group[0], group[1:]
+        ordered.append(head)
+        ordered.extend(
+            sorted(
+                bullets,
+                key=lambda bullet: -sum(
+                    _contains(bullet, keyword) for keyword in keywords
+                ),
+            )
+        )
+    return ordered
+
+
+def build_tailored_text(
+    cv_text: str,
+    match: dict,
+    extra_skills: list[str] | None = None,
+    headline: str | None = None,
+) -> str:
+    """Prioritise verified JD skills without adding unsupported claims."""
+    header, sections, _ = parse_cv_sections(cv_text)
+    confirmed = [skill for skill in (extra_skills or []) if skill.strip()]
+    matched = _dedupe(list(match["matched"]) + confirmed)
+
+    if confirmed:
+        sections.setdefault("SKILLS", [])
+        sections["SKILLS"].append(", ".join(confirmed))
+
+    if matched:
+        sections["JD-MATCHED SKILLS"] = [", ".join(matched)]
+        # Keep every original skill line, but move JD-relevant lines first.
+        sections["SKILLS"] = sorted(
+            sections.get("SKILLS", []),
+            key=lambda line: -sum(_contains(line, skill) for skill in matched),
+        )
+    else:
+        sections.pop("JD-MATCHED SKILLS", None)
+
+    for name in ("PROFESSIONAL EXPERIENCE", "INTERNSHIPS", "PROJECTS"):
+        if sections.get(name):
+            sections[name] = _prioritise_entry_bullets(
+                _normalize_section_lines(name, sections[name]), matched
+            )
+
+    if headline and headline.strip():
+        cleaned = re.sub(r"\s+", " ", headline).strip()
+        if len(header) >= 2:
+            header[1] = cleaned
+        else:
+            header.append(cleaned)
+
+    rebuilt = list(header)
+    for heading in REFERENCE_ORDER:
+        lines = sections.get(heading, [])
+        if lines:
+            rebuilt.extend(("", heading, *lines))
+
+    return restructure_to_reference("\n".join(rebuilt))
 
 
 def parse_cv_sections(text: str) -> tuple[list[str], dict[str, list[str]], list[str]]:
@@ -402,6 +1111,85 @@ def parse_cv_sections(text: str) -> tuple[list[str], dict[str, list[str]], list[
     return header, sections, order
 
 
+MONTH_WORDS = (
+    "january", "february", "march", "april", "may", "june", "july", "august",
+    "september", "october", "november", "december", "jan", "feb", "mar", "apr",
+    "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec",
+)
+
+
+def _is_date_line(line: str) -> bool:
+    """True for a stand-alone duration line such as 'July 2024 - March 2025'."""
+    text = line.strip().rstrip(".")
+    if not text or text.startswith(("-", "*", "\u2022")):
+        return False
+    words = text.split()
+    if len(words) > 8:
+        return False
+    low = text.lower()
+    has_period = bool(re.search(r"(19|20)\d{2}", text)) or "present" in low
+    if not has_period:
+        return False
+    allowed = set(MONTH_WORDS) | {"present", "current", "to", "till", "-", "–"}
+    for word in words:
+        token = word.strip("(),.-–|").lower()
+        if not token:
+            continue
+        if token in allowed or token.isdigit() or re.fullmatch(r"\d{1,2}/\d{2,4}", token):
+            continue
+        return False
+    return True
+
+
+def _is_entry_heading(line: str) -> bool:
+    """True for a company / degree / project title line, not a description."""
+    text = line.strip()
+    if not text or text.startswith(("-", "*", "\u2022")):
+        return False
+    words = text.split()
+    if len(words) > 16:
+        return False
+    if re.search(r"(19|20)\d{2}", text):
+        return True
+    separated = bool(re.search(r"\s[-\u2013\u2014|]\s", text))
+    if separated and "present" in text.lower():
+        return True
+    if separated and len(words) <= 14 and not text.endswith("."):
+        return True
+    return len(words) <= 6 and text == text.upper() and not text.endswith(".")
+
+
+def _normalize_section_lines(name: str, lines: list[str]) -> list[str]:
+    """Keep entry titles on their own line and turn descriptions into bullets."""
+    if name in PROSE_SECTIONS:
+        return lines
+    rows: list[str] = []
+    if name in BULLET_SECTIONS:
+        for line in lines:
+            body = line.lstrip("-*\u2022 ").strip()
+            if body:
+                rows.append("- " + body)
+        return rows
+    if name not in ENTRY_SECTIONS:
+        return lines
+    entry_seen = False
+    for line in lines:
+        if line.startswith(("-", "*", "\u2022")):
+            body = line.lstrip("-*\u2022 ").strip()
+            if body:
+                rows.append("- " + body)
+            continue
+        if _is_entry_heading(line):
+            entry_seen = True
+            rows.append(line)
+        elif entry_seen and len(line.split()) >= 4:
+            rows.append("- " + line)
+        else:
+            entry_seen = True
+            rows.append(line)
+    return rows
+
+
 def restructure_to_reference(text: str) -> str:
     """Reorder any CV text into the reference resume layout, ATS-safe."""
     header, sections, order = parse_cv_sections(text)
@@ -419,7 +1207,7 @@ def restructure_to_reference(text: str) -> str:
 
     for name in ordered:
         out += ["", name]
-        out += sections[name]
+        out += _normalize_section_lines(name, sections[name])
 
     return "\n".join(out).strip() + "\n"
 
@@ -813,6 +1601,7 @@ def compose_cv_text(
         ("PROFESSIONAL EXPERIENCE", "experience"),
         ("PROJECTS", "projects"),
         ("EDUCATION", "education"),
+        ("QUALIFICATION", "qualification"),
         ("CERTIFICATIONS", "certifications"),
         ("INTERNSHIPS", "internships"),
         ("ACHIEVEMENTS", "achievements"),
@@ -894,39 +1683,60 @@ def build_ats_pdf(
     text: str,
     title: str = "ATS Resume",
     photo_bytes: bytes | None = None,
+    template: str = "reference",
 ) -> bytes:
     """Create an attractive, selectable, one-column ATS-safe PDF."""
     output = BytesIO()
     styles = getSampleStyleSheet()
-    navy = colors.HexColor("#28306B")
-    pale_blue = colors.HexColor("#EEF0FA")
-    charcoal = colors.HexColor("#2A2E3A")
+    design = cv_template(template)
+    primary = colors.HexColor("#" + design["primary"])
+    accent = colors.HexColor("#" + design["accent"])
+    heading_fill = colors.HexColor("#" + design["heading_fill"])
+    heading_text = colors.HexColor("#" + design["heading_text"])
+    ruled = design.get("ruled_headings", False)
+    compact = design.get("compact", False)
+    body_colour = colors.black if ruled else colors.HexColor("#2A2E3A")
+    entry_colour = colors.black if ruled else colors.HexColor("#1F2437")
+    gap = 1.5 if compact else 3
     name_style = ParagraphStyle(
         "Name", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=17, leading=20, spaceAfter=4, textColor=navy,
+        fontSize=17, leading=19, spaceAfter=2 if compact else 4,
+        textColor=primary,
     )
     heading_style = ParagraphStyle(
         "Heading", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=10.5, leading=13, spaceBefore=8, spaceAfter=4,
-        textColor=navy, backColor=pale_blue, borderPadding=(3, 5, 3, 5),
+        fontSize=11, leading=13,
+        spaceBefore=7 if compact else 11, spaceAfter=1 if compact else 6,
+        textColor=heading_text,
+        backColor=None if ruled else heading_fill,
+        borderPadding=None if ruled else (4, 6, 4, 6),
+        borderRadius=None if ruled else 2,
+        keepWithNext=1,
     )
     body_style = ParagraphStyle(
         "Body", parent=styles["Normal"], fontName="Helvetica",
-        fontSize=9.5, leading=12.2, spaceAfter=2, textColor=charcoal,
+        fontSize=9.5, leading=11.4 if compact else 12.2,
+        spaceAfter=1 if compact else 2, textColor=body_colour,
     )
     bullet_style = ParagraphStyle(
         "Bullet", parent=body_style, leftIndent=13, firstLineIndent=-9,
-        bulletIndent=1, spaceAfter=2,
+        bulletIndent=1, spaceAfter=0.5 if compact else 2,
     )
     role_style = ParagraphStyle(
         "Role", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=11, leading=13.5, spaceAfter=3,
-        textColor=colors.HexColor("#5A4B9C"),
+        fontSize=11, leading=13, spaceAfter=1 if compact else 3,
+        textColor=accent,
     )
     entry_style = ParagraphStyle(
         "Entry", parent=styles["Normal"], fontName="Helvetica-Bold",
-        fontSize=10, leading=12.5, spaceBefore=3, spaceAfter=1,
-        textColor=colors.HexColor("#1F2437"),
+        fontSize=10, leading=12,
+        spaceBefore=3 if compact else 4, spaceAfter=0.5 if compact else 1,
+        textColor=entry_colour, keepWithNext=1,
+    )
+    date_style = ParagraphStyle(
+        "Date", parent=styles["Normal"], fontName="Helvetica-Oblique",
+        fontSize=9, leading=11, spaceAfter=1, textColor=body_colour,
+        keepWithNext=1,
     )
 
     story = []
@@ -964,7 +1774,7 @@ def build_ats_pdf(
             )
         )
         story.append(table)
-        story.append(Spacer(1, 6))
+        story.append(Spacer(1, 4 if compact else 6))
         source_lines = rest
         nonempty_seen = 3
 
@@ -972,7 +1782,7 @@ def build_ats_pdf(
     for raw in source_lines:
         line = raw.strip()
         if not line:
-            story.append(Spacer(1, 3))
+            story.append(Spacer(1, gap))
             continue
         safe = html.escape(line)
         upper = line.upper().rstrip(":")
@@ -981,13 +1791,30 @@ def build_ats_pdf(
         elif nonempty_seen == 1 and line == upper and len(line.split()) <= 6:
             story.append(Paragraph(safe, role_style))
         elif upper in SECTION_HEADINGS or upper == "JD-MATCHED SKILLS":
+            if ruled and not section:
+                story.append(
+                    HRFlowable(
+                        width="100%", thickness=0.7, color=colors.black,
+                        spaceBefore=2, spaceAfter=0,
+                    )
+                )
             section = HEADING_ALIASES.get(upper, upper)
             story.append(Paragraph(html.escape(upper), heading_style))
+            if ruled:
+                story.append(
+                    HRFlowable(
+                        width="100%", thickness=0.7, color=colors.black,
+                        spaceBefore=0, spaceAfter=3,
+                    )
+                )
         elif line.startswith(("-", "*", "•")):
             content = html.escape(line.lstrip("-*• ").strip())
             story.append(Paragraph(f"• {content}", bullet_style))
         elif section and section not in PROSE_SECTIONS:
-            story.append(Paragraph(safe, entry_style))
+            if _is_date_line(line):
+                story.append(Paragraph(safe, date_style))
+            else:
+                story.append(Paragraph(safe, entry_style))
         else:
             story.append(Paragraph(safe, body_style))
         nonempty_seen += 1
@@ -1001,19 +1828,38 @@ def build_ats_pdf(
     return output.getvalue()
 
 
-def _set_paragraph_bottom_border(paragraph) -> None:
-    """Add a subtle ATS-safe border below a DOCX section heading."""
+def _shade_paragraph(paragraph, fill: str) -> None:
+    """Fill a DOCX heading paragraph so the section stands out."""
     p_pr = paragraph._p.get_or_add_pPr()
-    borders = p_pr.find(qn("w:pBdr"))
-    if borders is None:
-        borders = OxmlElement("w:pBdr")
-        p_pr.append(borders)
+    existing = p_pr.find(qn("w:shd"))
+    if existing is not None:
+        p_pr.remove(existing)
+    shading = OxmlElement("w:shd")
+    shading.set(qn("w:val"), "clear")
+    shading.set(qn("w:color"), "auto")
+    shading.set(qn("w:fill"), fill)
+    p_pr.append(shading)
+
+
+def _rgb(hex_colour: str) -> RGBColor:
+    """Convert a six-character RGB hex colour into a python-docx colour."""
+    return RGBColor.from_string(hex_colour)
+
+
+def _rule_below_paragraph(paragraph, colour: str = "000000") -> None:
+    """Draw a line under a DOCX heading, matching the reference CV."""
+    p_pr = paragraph._p.get_or_add_pPr()
+    existing = p_pr.find(qn("w:pBdr"))
+    if existing is not None:
+        p_pr.remove(existing)
+    borders = OxmlElement("w:pBdr")
     bottom = OxmlElement("w:bottom")
     bottom.set(qn("w:val"), "single")
     bottom.set(qn("w:sz"), "6")
-    bottom.set(qn("w:space"), "2")
-    bottom.set(qn("w:color"), "6A6FB5")
+    bottom.set(qn("w:space"), "1")
+    bottom.set(qn("w:color"), colour)
     borders.append(bottom)
+    p_pr.append(borders)
 
 
 def _clear_table_borders(table) -> None:
@@ -1040,8 +1886,12 @@ def build_ats_docx(
     text: str,
     title: str = "ATS Resume",
     photo_bytes: bytes | None = None,
+    template: str = "reference",
 ) -> bytes:
     """Create a single-column DOCX preferred by many ATS platforms."""
+    design = cv_template(template)
+    ruled = design.get("ruled_headings", False)
+    compact = design.get("compact", False)
     document = Document()
     section = document.sections[0]
     section.top_margin = Inches(0.55)
@@ -1052,8 +1902,8 @@ def build_ats_docx(
     normal = document.styles["Normal"]
     normal.font.name = "Arial"
     normal.font.size = Pt(10)
-    normal.paragraph_format.space_after = Pt(2)
-    normal.paragraph_format.line_spacing = 1.05
+    normal.paragraph_format.space_after = Pt(1 if compact else 2)
+    normal.paragraph_format.line_spacing = 1.0 if compact else 1.05
 
     source_lines = text.splitlines()
     nonempty_seen = 0
@@ -1073,11 +1923,11 @@ def build_ats_docx(
             if index == 0:
                 run.bold = True
                 run.font.size = Pt(18)
-                run.font.color.rgb = RGBColor(0x28, 0x30, 0x6B)
+                run.font.color.rgb = _rgb(design["primary"])
             elif index == 1 and line == line.upper() and len(line.split()) <= 6:
                 run.bold = True
                 run.font.size = Pt(11.5)
-                run.font.color.rgb = RGBColor(0x5A, 0x4B, 0x9C)
+                run.font.color.rgb = _rgb(design["accent"])
             else:
                 run.font.size = Pt(10)
                 run.font.color.rgb = RGBColor(0x2A, 0x2E, 0x3A)
@@ -1104,7 +1954,7 @@ def build_ats_docx(
             run.bold = True
             run.font.name = "Arial"
             run.font.size = Pt(18)
-            run.font.color.rgb = RGBColor(0x28, 0x30, 0x6B)
+            run.font.color.rgb = _rgb(design["primary"])
             paragraph.paragraph_format.space_after = Pt(3)
         elif nonempty_seen == 1 and line == upper and len(line.split()) <= 6:
             paragraph = document.add_paragraph()
@@ -1112,7 +1962,7 @@ def build_ats_docx(
             run.bold = True
             run.font.name = "Arial"
             run.font.size = Pt(11.5)
-            run.font.color.rgb = RGBColor(0x5A, 0x4B, 0x9C)
+            run.font.color.rgb = _rgb(design["accent"])
             paragraph.paragraph_format.space_after = Pt(3)
         elif upper in SECTION_HEADINGS or upper == "JD-MATCHED SKILLS":
             section = HEADING_ALIASES.get(upper, upper)
@@ -1121,22 +1971,28 @@ def build_ats_docx(
             run.bold = True
             run.font.name = "Arial"
             run.font.size = Pt(11)
-            run.font.color.rgb = RGBColor(0x28, 0x30, 0x6B)
-            paragraph.paragraph_format.space_before = Pt(7)
-            paragraph.paragraph_format.space_after = Pt(3)
-            _set_paragraph_bottom_border(paragraph)
+            run.font.color.rgb = _rgb(design["heading_text"])
+            paragraph.paragraph_format.space_before = Pt(7 if compact else 9)
+            paragraph.paragraph_format.space_after = Pt(2 if compact else 5)
+            if ruled:
+                _rule_below_paragraph(paragraph)
+            else:
+                _shade_paragraph(paragraph, design["heading_fill"])
         elif line.startswith(("-", "*", "•")):
             paragraph = document.add_paragraph(style="List Bullet")
             paragraph.add_run(line.lstrip("-*• ").strip())
-            paragraph.paragraph_format.space_after = Pt(2)
+            paragraph.paragraph_format.space_after = Pt(1 if compact else 2)
         elif section and section not in PROSE_SECTIONS:
             paragraph = document.add_paragraph()
             run = paragraph.add_run(line)
-            run.bold = True
             run.font.name = "Arial"
-            run.font.size = Pt(10)
-            paragraph.paragraph_format.space_before = Pt(3)
-            paragraph.paragraph_format.space_after = Pt(1)
+            run.font.size = Pt(9.5 if _is_date_line(line) else 10)
+            if _is_date_line(line):
+                run.italic = True
+            else:
+                run.bold = True
+            paragraph.paragraph_format.space_before = Pt(2 if compact else 3)
+            paragraph.paragraph_format.space_after = Pt(0 if compact else 1)
         else:
             document.add_paragraph(line)
         nonempty_seen += 1
@@ -1152,8 +2008,10 @@ def build_cv_xlsx(
     text: str,
     title: str = "CV Reference",
     photo_bytes: bytes | None = None,
+    template: str = "reference",
 ) -> bytes:
     """Create an Excel reference copy; XLSX is not recommended for ATS upload."""
+    design = cv_template(template)
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "CV"
@@ -1179,15 +2037,24 @@ def build_cv_xlsx(
         cell = sheet.cell(row=row, column=1, value=line)
         cell.alignment = Alignment(wrap_text=True, vertical="top")
         if nonempty_seen == 0:
-            cell.font = Font(name="Arial", size=17, bold=True, color="28306B")
+            cell.font = Font(
+                name="Arial", size=17, bold=True, color=design["primary"]
+            )
             sheet.row_dimensions[row].height = 27
         elif nonempty_seen == 1 and line == upper and len(line.split()) <= 6:
-            cell.font = Font(name="Arial", size=11, bold=True, color="5A4B9C")
+            cell.font = Font(
+                name="Arial", size=11, bold=True, color=design["accent"]
+            )
             sheet.row_dimensions[row].height = 20
         elif upper in SECTION_HEADINGS or upper == "JD-MATCHED SKILLS":
             cell.value = upper
-            cell.font = Font(name="Arial", size=11, bold=True, color="28306B")
-            cell.fill = PatternFill("solid", fgColor="EEF0FA")
+            cell.font = Font(
+                name="Arial", size=11, bold=True, color=design["heading_text"]
+            )
+            if design.get("ruled_headings"):
+                cell.border = Border(bottom=Side(style="thin", color="000000"))
+            else:
+                cell.fill = PatternFill("solid", fgColor=design["heading_fill"])
             sheet.row_dimensions[row].height = 22
         else:
             cell.font = Font(name="Arial", size=10, color="2A2E3A")
