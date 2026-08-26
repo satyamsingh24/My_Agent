@@ -1056,8 +1056,21 @@ def render_ats_overview(result: dict) -> None:
 
 
 @st.cache_data(show_spinner=False)
-def template_preview(text: str, template: str) -> bytes:
-    return build_template_preview(text, template)
+def template_preview(text: str, template: str, width: int = 430) -> bytes:
+    return build_template_preview(text, template, width=width)
+
+
+def full_width_image(image: bytes) -> None:
+    """Streamlit renamed the image sizing argument in 1.49, and the browser
+    build still ships an older release, so pick whichever it understands."""
+    try:
+        version = tuple(int(part) for part in st.__version__.split(".")[:2])
+    except ValueError:
+        version = (0, 0)
+    if version >= (1, 49):
+        st.image(image, width="stretch")
+    else:
+        st.image(image, use_container_width=True)
 
 
 SAMPLE_CV_SECTIONS = {
@@ -1285,13 +1298,18 @@ elif screen == "templates":
         "content; after selection, fill in your own details and target JD."
     )
     sample = sample_cv_text()
+    # Drawing ten thumbnails is far slower in the browser build, so the hosted
+    # app renders them smaller.
+    preview_width = 260 if is_hosted() else 430
     template_items = list(CV_TEMPLATES.items())
     for row_start in range(0, len(template_items), 3):
         row_items = template_items[row_start : row_start + 3]
         columns = st.columns(3)
         for (template, design), column in zip(row_items, columns):
             with column:
-                st.image(template_preview(sample, template), width="stretch")
+                full_width_image(
+                    template_preview(sample, template, preview_width)
+                )
                 st.markdown(f"**{design['label']}**")
                 st.caption(design["description"])
                 if st.button(
