@@ -28,6 +28,7 @@ from cv_engine import (
     load_existing_cv,
     match_jd,
     random_output_stem,
+    restructure_to_reference,
     save_existing_cv,
     save_generated,
 )
@@ -132,6 +133,33 @@ def theme_css(theme_name: str) -> str:
             border: 1px solid rgba(255,255,255,.22); font-size: .9rem;
             color: #eaf4ff;
         }}
+        .hero.lock-hero {{ padding-bottom: 3.4rem; }}
+        .st-key-lock_pill {{
+            margin-top: -3.35rem; margin-bottom: 1.2rem;
+            position: relative; z-index: 2; text-align: center;
+            animation: agentFadeUp .55s ease both;
+        }}
+        .st-key-lock_pill [data-testid="stElementContainer"] {{
+            width: 100% !important; display: flex !important;
+            justify-content: center !important;
+        }}
+        .st-key-lock_pill [data-testid="stButton"] {{
+            display: flex; justify-content: center; width: auto;
+        }}
+        .st-key-lock_pill div.stButton > button {{
+            width: auto !important; min-height: 0; padding: .5rem 1.15rem;
+            border-radius: 999px; font-weight: 600; font-size: .9rem;
+            background: rgba(255,255,255,.12); color: #eaf4ff !important;
+            border: 1px solid rgba(255,255,255,.22); box-shadow: none;
+        }}
+        .st-key-lock_pill div.stButton > button:hover {{
+            transform: translateY(-1px) scale(1.02);
+            background: rgba(255,255,255,.22); color: #ffffff !important;
+            border-color: rgba(255,255,255,.42); box-shadow: none;
+        }}
+        .st-key-lock_pill div.stButton > button p {{
+            color: inherit !important; margin: 0;
+        }}
         .card {{
             background: {t["panel"]}; border: 1px solid {t["border"]};
             border-radius: 16px; padding: 1.15rem 1.25rem; margin: .55rem 0;
@@ -154,7 +182,8 @@ def theme_css(theme_name: str) -> str:
             border-radius: 999px; font-size: .82rem; background: {t["panel_soft"]};
             border: 1px solid {t["border"]}; color: {t["text"]};
         }}
-        div.stButton > button, div.stDownloadButton > button {{
+        div.stButton > button, div.stDownloadButton > button,
+        div[data-testid="stFormSubmitButton"] > button {{
             width: 100%; min-height: 3.1rem; border-radius: 14px;
             font-weight: 700; font-size: 1rem; letter-spacing: .01em;
             background: {t["panel"]}; color: {t["text"]};
@@ -162,26 +191,31 @@ def theme_css(theme_name: str) -> str:
             transition: transform .16s ease, box-shadow .16s ease,
                         background .16s ease, border-color .16s ease, color .16s ease;
         }}
-        div.stButton > button:hover, div.stDownloadButton > button:hover {{
+        div.stButton > button:hover, div.stDownloadButton > button:hover,
+        div[data-testid="stFormSubmitButton"] > button:hover {{
             transform: translateY(-2px);
             background: linear-gradient(135deg, {t["accent"]}, {t["accent2"]});
             color: #ffffff !important; border-color: transparent;
             box-shadow: 0 8px 18px {t["accent"]}33;
         }}
-        div.stButton > button:hover p, div.stDownloadButton > button:hover p {{
+        div.stButton > button:hover p, div.stDownloadButton > button:hover p,
+        div[data-testid="stFormSubmitButton"] > button:hover p {{
             color: #ffffff !important;
         }}
-        div.stButton > button:active, div.stDownloadButton > button:active {{
+        div.stButton > button:active, div.stDownloadButton > button:active,
+        div[data-testid="stFormSubmitButton"] > button:active {{
             transform: translateY(-1px) scale(.99);
         }}
         div.stButton > button[kind="primary"],
-        div.stDownloadButton > button[kind="primary"] {{
+        div.stDownloadButton > button[kind="primary"],
+        div[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {{
             background: linear-gradient(135deg, {t["accent"]}, {t["accent2"]});
             color: #fff; border: none;
             box-shadow: 0 6px 16px {t["accent"]}2e;
         }}
         div.stButton > button[kind="primary"]:hover,
-        div.stDownloadButton > button[kind="primary"]:hover {{
+        div.stDownloadButton > button[kind="primary"]:hover,
+        div[data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"]:hover {{
             background: linear-gradient(135deg, {t["accent2"]}, {t["accent"]});
             box-shadow: 0 10px 22px {t["accent2"]}3d;
         }}
@@ -345,6 +379,52 @@ def theme_css(theme_name: str) -> str:
             text-transform: uppercase;
         }}
 
+        .sheet-veil {{
+            position: fixed; inset: 0; z-index: 900;
+            background: rgba(6, 8, 18, .46);
+            backdrop-filter: blur(3px);
+            animation: sheetVeilIn .22s ease both;
+        }}
+        .st-key-pin_sheet {{
+            position: fixed; left: 50%; bottom: 0; z-index: 901;
+            width: min(400px, 94vw);
+            padding: .8rem 1.15rem 1.25rem;
+            background: {t["panel"]};
+            border: 1px solid {t["border"]}; border-bottom: none;
+            border-radius: 22px 22px 0 0;
+            box-shadow: 0 -16px 42px rgba(6, 8, 18, .38);
+            animation: sheetUp .3s cubic-bezier(.2, .74, .32, 1) both;
+        }}
+        .sheet-grip {{
+            width: 44px; height: 5px; border-radius: 999px;
+            background: {t["border"]}; margin: 0 auto .75rem;
+        }}
+        .sheet-head {{
+            text-align: center; font-weight: 700; font-size: 1rem;
+            margin-bottom: .7rem; color: {t["text"]};
+        }}
+        .st-key-pin_sheet div[data-testid="stTextInputRootElement"] {{
+            background: {t["panel_soft"]}; border: 1.5px solid {t["border"]};
+        }}
+        .st-key-pin_sheet .stTextInput input {{
+            text-align: center; letter-spacing: .45em; font-size: 1.15rem;
+            min-height: 3.1rem;
+        }}
+        .st-key-pin_sheet .stTextInput input::placeholder {{
+            letter-spacing: .3em; color: {t["muted"]};
+        }}
+        .st-key-pin_sheet div[data-testid="stForm"] {{ margin-bottom: .35rem; }}
+        /* The hint would sit on top of the centred PIN dots. */
+        .st-key-pin_sheet div[data-testid="InputInstructions"] {{ display: none; }}
+        @keyframes sheetUp {{
+            from {{ transform: translate(-50%, 100%); opacity: 0; }}
+            to   {{ transform: translate(-50%, 0); opacity: 1; }}
+        }}
+        @keyframes sheetVeilIn {{
+            from {{ opacity: 0; }}
+            to   {{ opacity: 1; }}
+        }}
+
         .privacy {{
             text-align: center; color: {t["muted"]}; font-size: .86rem;
             line-height: 1.55; max-width: 640px; margin: 0 auto .4rem;
@@ -389,18 +469,49 @@ def theme_css(theme_name: str) -> str:
             transform: translateY(-2px); border-color: {t["accent"]};
         }}
         div[data-testid="stAlert"] {{ animation: agentFadeUp .45s ease both; }}
-        .stTextInput input, .stTextArea textarea {{
+        /* Streamlit paints the input shell from its own base theme, so the
+           strip behind the reveal icon must follow the app theme instead. */
+        div[data-testid="stTextInputRootElement"] {{
+            background: {t["panel"]}; border: 1px solid {t["border"]};
+            border-radius: 14px; overflow: hidden;
             transition: border-color .18s ease, box-shadow .18s ease;
         }}
-        .stTextInput input:focus, .stTextArea textarea:focus {{
+        div[data-testid="stTextInputRootElement"]:focus-within {{
+            border-color: {t["accent"]};
+            box-shadow: 0 0 0 3px {t["accent"]}26;
+        }}
+        .stTextInput input {{
+            background: transparent !important; border: none !important;
+            color: {t["text"]};
+        }}
+        .stTextInput input::placeholder, .stTextArea textarea::placeholder {{
+            color: {t["muted"]}; opacity: .85;
+        }}
+        .stTextInput button {{
+            background: transparent !important; border: none !important;
+            color: {t["muted"]} !important; min-height: 0 !important;
+            width: auto !important;
+        }}
+        .stTextInput button:hover {{
+            color: {t["accent"]} !important; transform: none !important;
+            box-shadow: none !important;
+        }}
+        .stTextArea textarea {{
+            transition: border-color .18s ease, box-shadow .18s ease;
+        }}
+        .stTextArea textarea:focus {{
             border-color: {t["accent"]} !important;
             box-shadow: 0 0 0 3px {t["accent"]}26;
         }}
         @media (prefers-reduced-motion: reduce) {{
             .hero, .step, .step .num, .card, .option-card,
             .option-card::before, .privacy, div[data-testid="stExpander"],
-            div[data-testid="stMetric"], div[data-testid="stAlert"] {{
+            div[data-testid="stMetric"], div[data-testid="stAlert"],
+            .sheet-veil, .st-key-lock_pill {{
                 animation: none;
+            }}
+            .st-key-pin_sheet {{
+                animation: none; transform: translateX(-50%);
             }}
         }}
         </style>
@@ -647,16 +758,36 @@ Read this once, then start from **Upload CV** or **Make your CV**.
         st.rerun()
 
 
-@st.dialog("Enter PIN to continue")
-def pin_dialog() -> None:
-    st.write("My_AGENT is locked. Enter your PIN to continue.")
-    entered = st.text_input("PIN", type="password", max_chars=8, key="pin_input")
-    if st.button("Unlock", type="primary", use_container_width=True):
-        if entered.strip() == APP_PIN:
-            st.session_state["unlocked"] = True
-            st.rerun()
-        else:
+def pin_sheet() -> None:
+    """Small lock sheet that slides up from the bottom, like a phone lock."""
+    st.markdown('<div class="sheet-veil"></div>', unsafe_allow_html=True)
+    with st.container(key="pin_sheet"):
+        st.markdown(
+            '<div class="sheet-grip"></div>'
+            '<div class="sheet-head">🔒 Enter your PIN</div>',
+            unsafe_allow_html=True,
+        )
+        with st.form("pin_form", border=False):
+            entered = st.text_input(
+                "PIN",
+                type="password",
+                max_chars=8,
+                key="pin_input",
+                placeholder="••••",
+                label_visibility="collapsed",
+            )
+            submitted = st.form_submit_button(
+                "Unlock", type="primary", use_container_width=True
+            )
+        if submitted:
+            if entered.strip() == APP_PIN:
+                st.session_state["unlocked"] = True
+                st.session_state["pin_sheet_open"] = False
+                st.rerun()
             st.error("Incorrect PIN. Please try again.")
+        if st.button("Cancel", use_container_width=True, key="pin_cancel"):
+            st.session_state["pin_sheet_open"] = False
+            st.rerun()
 
 
 @st.dialog("Select AI Provider")
@@ -851,7 +982,11 @@ def align_cv_to_jd(
         settings=ai_settings,
     )
     if ai_result["ok"] and ai_result["response"]:
-        tailored = apply_ai_response(tailored, ai_result["response"])
+        # Re-apply the reference layout so AI edits cannot disturb the
+        # heading / bullet structure.
+        tailored = restructure_to_reference(
+            apply_ai_response(tailored, ai_result["response"])
+        )
         match = match_jd(tailored, jd_text)
         report = ats_report(tailored, jd_text, match)
 
@@ -1152,15 +1287,22 @@ if not st.session_state.get("unlocked"):
     photo_backdrop(st.session_state["theme"])
     st.markdown(
         """
-        <div class="hero">
+        <div class="hero lock-hero">
           <h1>Welcome to My_AGENT</h1>
           <div class="by">Created by Satyam Singh Bhadoriya</div>
-          <div class="flow">🔒 Locked — enter your PIN to unlock</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    pin_dialog()
+    with st.container(key="lock_pill"):
+        if st.button(
+            "🔒 Locked — tap unlock and enter your PIN",
+            key="open_pin_sheet",
+        ):
+            st.session_state["pin_sheet_open"] = True
+            st.rerun()
+    if st.session_state.get("pin_sheet_open"):
+        pin_sheet()
     st.stop()
 
 with st.sidebar:

@@ -299,8 +299,10 @@ def build_template_preview(text: str, template: str, width: int = 430) -> bytes:
                     fill=heading_text,
                 )
                 y += band + 5
-        elif line.startswith(("-", "*", "\u2022")):
-            body = "\u2022 " + line.lstrip("-*\u2022 ").strip()
+        elif line.startswith(("-", "*", "\u2022")) or _is_numbered_item(line):
+            body = line
+            if not _is_numbered_item(line):
+                body = "\u2022 " + line.lstrip("-*\u2022 ").strip()
             draw.text(
                 (margin + 6, y),
                 _fit_preview_text(body, body_font, inner - 6),
@@ -569,6 +571,64 @@ def extract_pdf_text(pdf_bytes: bytes) -> str:
 BULLET_GLYPHS = "\u2022\u2023\u2043\u2219\u25aa\u25cf\u25e6\u00b7\u007f\uf0a7\uf0b7\uf06c"
 
 
+# A PDF stores one line per rendered row, so a single bullet or sentence is
+# usually split across several lines. Anything shorter than this is treated as
+# a deliberate short line instead of a wrapped remainder.
+WRAP_MIN_LENGTH = 55
+SENTENCE_END = (".", ":", ";", "!", "?")
+
+
+def _is_numbered_item(line: str) -> bool:
+    """True for a user-written list item such as '1. Built the pipeline'."""
+    return bool(re.match(r"^\(?\d{1,2}[.)]\s+\S", line.strip()))
+
+
+def _is_list_item(line: str) -> bool:
+    return line.startswith(("-", "*", "\u2022")) or _is_numbered_item(line)
+
+
+def _starts_new_block(line: str) -> bool:
+    """True when a line begins a heading, list item, entry title or date."""
+    key = line.upper().rstrip(":")
+    if key in SECTION_HEADINGS or key in HEADING_ALIASES or key in DROP_HEADINGS:
+        return True
+    if _is_list_item(line):
+        return True
+    return _is_date_line(line) or _is_entry_heading(line)
+
+
+def _accepts_continuation(line: str) -> bool:
+    """Long list items and prose can absorb a wrapped remainder; titles cannot."""
+    if len(line) < WRAP_MIN_LENGTH:
+        return False
+    key = line.upper().rstrip(":")
+    if key in SECTION_HEADINGS or key in HEADING_ALIASES or key in DROP_HEADINGS:
+        return False
+    if _is_date_line(line):
+        return False
+    if _is_list_item(line):
+        return True
+    return not _is_entry_heading(line)
+
+
+def _merge_wrapped_lines(lines: list[str]) -> list[str]:
+    """Join lines the PDF wrapped so each bullet stays one complete point."""
+    merged: list[str] = []
+    for line in lines:
+        previous = merged[-1] if merged else ""
+        if (
+            previous
+            and line
+            and not _starts_new_block(line)
+            and _accepts_continuation(previous)
+            and (line[:1].islower() or not previous.endswith(SENTENCE_END))
+        ):
+            merged[-1] = previous + " " + line
+            continue
+        merged.append(line)
+    return merged
+
+
 def clean_text(text: str) -> str:
     for glyph in BULLET_GLYPHS:
         text = text.replace(glyph, "-")
@@ -585,7 +645,7 @@ def clean_text(text: str) -> str:
             continue
         blank = False
         lines.append(line)
-    return "\n".join(lines).strip()
+    return "\n".join(_merge_wrapped_lines(lines)).strip()
 
 
 def save_existing_cv(pdf_bytes: bytes, original_name: str, text: str) -> dict:
@@ -801,9 +861,25 @@ TITLE_NOISE = {
 }
 
 
+# Words that sit in front of a title in a JD sentence but are not part of it,
+# e.g. "We are hiring a DevOps Engineer".
+TITLE_FILLER = {
+    "a", "an", "the", "we", "are", "is", "for", "our", "of", "as", "to", "and",
+    "hiring", "looking", "seeking", "need", "needs", "want", "wanted", "join",
+    "urgent", "urgently", "immediate", "immediately", "required", "requires",
+    "requirement", "opening", "openings", "vacancy", "job", "role", "position",
+    "title", "designation", "experienced", "fresher", "new", "one", "multiple",
+}
+
+
 def _role_phrase(text: str) -> str:
     match = ROLE_PHRASE_RE.search(text)
-    return re.sub(r"\s+", " ", match.group(1)).strip() if match else ""
+    if not match:
+        return ""
+    words = re.sub(r"\s+", " ", match.group(1)).strip().split()
+    while words and words[0].strip(".,:-()").lower() in TITLE_FILLER:
+        words.pop(0)
+    return " ".join(words)
 
 
 def jd_role_title(jd_text: str) -> str:
@@ -1008,7 +1084,7 @@ def _prioritise_entry_bullets(lines: list[str], keywords: list[str]) -> list[str
         return lines
     groups: list[list[str]] = []
     for line in lines:
-        if line.startswith(("-", "*", "\u2022")) and groups:
+        if _is_list_item(line) and groups:
             groups[-1].append(line)
         else:
             groups.append([line])
@@ -1017,6 +1093,10 @@ def _prioritise_entry_bullets(lines: list[str], keywords: list[str]) -> list[str
     for group in groups:
         head, bullets = group[0], group[1:]
         ordered.append(head)
+        if any(_is_numbered_item(bullet) for bullet in bullets):
+            # A numbered list states its own sequence, so leave it alone.
+            ordered.extend(bullets)
+            continue
         ordered.extend(
             sorted(
                 bullets,
@@ -1040,18 +1120,20 @@ def build_tailored_text(
     matched = _dedupe(list(match["matched"]) + confirmed)
 
     if confirmed:
+        # Match the reference CV's "- Category: items" skill lines instead of
+        # dropping a bare comma list into the section.
         sections.setdefault("SKILLS", [])
-        sections["SKILLS"].append(", ".join(confirmed))
+        sections["SKILLS"].append("- JD Skills: " + ", ".join(confirmed))
 
     if matched:
-        sections["JD-MATCHED SKILLS"] = [", ".join(matched)]
         # Keep every original skill line, but move JD-relevant lines first.
         sections["SKILLS"] = sorted(
             sections.get("SKILLS", []),
             key=lambda line: -sum(_contains(line, skill) for skill in matched),
         )
-    else:
-        sections.pop("JD-MATCHED SKILLS", None)
+    # Matched skills already appear in SKILLS, so a second keyword-only block
+    # would just repeat them and stop the CV looking like the reference layout.
+    sections.pop("JD-MATCHED SKILLS", None)
 
     for name in ("PROFESSIONAL EXPERIENCE", "INTERNSHIPS", "PROJECTS"):
         if sections.get(name):
@@ -1060,7 +1142,8 @@ def build_tailored_text(
             )
 
     if headline and headline.strip():
-        cleaned = re.sub(r"\s+", " ", headline).strip()
+        # The reference CV prints the role in capitals right under the name.
+        cleaned = re.sub(r"\s+", " ", headline).strip().upper()
         if len(header) >= 2:
             header[1] = cleaned
         else:
@@ -1121,7 +1204,7 @@ MONTH_WORDS = (
 def _is_date_line(line: str) -> bool:
     """True for a stand-alone duration line such as 'July 2024 - March 2025'."""
     text = line.strip().rstrip(".")
-    if not text or text.startswith(("-", "*", "\u2022")):
+    if not text or text.startswith(("-", "*", "\u2022")) or _is_numbered_item(text):
         return False
     words = text.split()
     if len(words) > 8:
@@ -1141,10 +1224,25 @@ def _is_date_line(line: str) -> bool:
     return True
 
 
+# Sections where the reference CV highlights only the degree or course name and
+# leaves the institute and the years in normal weight.
+TITLE_DETAIL_SECTIONS = {"EDUCATION", "QUALIFICATION", "CERTIFICATIONS"}
+
+
+def _split_entry_detail(line: str, section: str) -> tuple[str, str]:
+    """Split 'Degree - Institute (years)' into highlighted and plain parts."""
+    if section not in TITLE_DETAIL_SECTIONS:
+        return line, ""
+    parts = re.split(r"\s[-\u2013\u2014]\s", line, maxsplit=1)
+    if len(parts) != 2 or not parts[1].strip():
+        return line, ""
+    return parts[0].strip(), parts[1].strip()
+
+
 def _is_entry_heading(line: str) -> bool:
     """True for a company / degree / project title line, not a description."""
     text = line.strip()
-    if not text or text.startswith(("-", "*", "\u2022")):
+    if not text or text.startswith(("-", "*", "\u2022")) or _is_numbered_item(text):
         return False
     words = text.split()
     if len(words) > 16:
@@ -1166,6 +1264,9 @@ def _normalize_section_lines(name: str, lines: list[str]) -> list[str]:
     rows: list[str] = []
     if name in BULLET_SECTIONS:
         for line in lines:
+            if _is_numbered_item(line):
+                rows.append(line)
+                continue
             body = line.lstrip("-*\u2022 ").strip()
             if body:
                 rows.append("- " + body)
@@ -1174,6 +1275,10 @@ def _normalize_section_lines(name: str, lines: list[str]) -> list[str]:
         return lines
     entry_seen = False
     for line in lines:
+        if _is_numbered_item(line):
+            entry_seen = True
+            rows.append(line)
+            continue
         if line.startswith(("-", "*", "\u2022")):
             body = line.lstrip("-*\u2022 ").strip()
             if body:
@@ -1432,9 +1537,9 @@ def _looks_like_skill_list(lines: list[str]) -> bool:
 
 
 def group_skills(items: list[str]) -> list[str]:
-    """Print skills as labelled groups so the block reads like a pro resume."""
+    """Print skills as labelled bullet groups, matching the reference CV."""
     if len(items) < 4:
-        return [", ".join(items)] if items else []
+        return ["- " + ", ".join(items)] if items else []
     buckets: dict[str, list[str]] = {}
     leftover: list[str] = []
     for item in items:
@@ -1446,12 +1551,12 @@ def group_skills(items: list[str]) -> list[str]:
         else:
             leftover.append(item)
     rows = [
-        f"{label}: {', '.join(buckets[label])}"
+        f"- {label}: {', '.join(buckets[label])}"
         for label, _ in SKILL_GROUPS
         if buckets.get(label)
     ]
     if leftover:
-        rows.append(f"Additional Skills: {', '.join(leftover)}")
+        rows.append(f"- Additional Skills: {', '.join(leftover)}")
     return rows
 
 
@@ -1738,6 +1843,9 @@ def build_ats_pdf(
         fontSize=9, leading=11, spaceAfter=1, textColor=body_colour,
         keepWithNext=1,
     )
+    entry_detail_style = ParagraphStyle(
+        "EntryDetail", parent=entry_style, fontName="Helvetica",
+    )
 
     story = []
     source_lines = text.splitlines()
@@ -1810,11 +1918,22 @@ def build_ats_pdf(
         elif line.startswith(("-", "*", "•")):
             content = html.escape(line.lstrip("-*• ").strip())
             story.append(Paragraph(f"• {content}", bullet_style))
+        elif _is_numbered_item(line):
+            story.append(Paragraph(safe, bullet_style))
         elif section and section not in PROSE_SECTIONS:
             if _is_date_line(line):
                 story.append(Paragraph(safe, date_style))
             else:
-                story.append(Paragraph(safe, entry_style))
+                head, detail = _split_entry_detail(line, section)
+                if detail:
+                    story.append(
+                        Paragraph(
+                            f"<b>{html.escape(head)}</b> - {html.escape(detail)}",
+                            entry_detail_style,
+                        )
+                    )
+                else:
+                    story.append(Paragraph(safe, entry_style))
         else:
             story.append(Paragraph(safe, body_style))
         nonempty_seen += 1
@@ -1982,15 +2101,29 @@ def build_ats_docx(
             paragraph = document.add_paragraph(style="List Bullet")
             paragraph.add_run(line.lstrip("-*• ").strip())
             paragraph.paragraph_format.space_after = Pt(1 if compact else 2)
+        elif _is_numbered_item(line):
+            # Keep the author's own numbering instead of letting Word renumber.
+            paragraph = document.add_paragraph()
+            paragraph.add_run(line)
+            paragraph.paragraph_format.left_indent = Inches(0.25)
+            paragraph.paragraph_format.space_after = Pt(1 if compact else 2)
         elif section and section not in PROSE_SECTIONS:
             paragraph = document.add_paragraph()
-            run = paragraph.add_run(line)
-            run.font.name = "Arial"
-            run.font.size = Pt(9.5 if _is_date_line(line) else 10)
             if _is_date_line(line):
+                run = paragraph.add_run(line)
+                run.font.name = "Arial"
+                run.font.size = Pt(9.5)
                 run.italic = True
             else:
+                head, detail = _split_entry_detail(line, section)
+                run = paragraph.add_run(head)
+                run.font.name = "Arial"
+                run.font.size = Pt(10)
                 run.bold = True
+                if detail:
+                    tail = paragraph.add_run(" - " + detail)
+                    tail.font.name = "Arial"
+                    tail.font.size = Pt(10)
             paragraph.paragraph_format.space_before = Pt(2 if compact else 3)
             paragraph.paragraph_format.space_after = Pt(0 if compact else 1)
         else:
