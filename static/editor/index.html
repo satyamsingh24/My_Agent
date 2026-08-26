@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>CV Editor - My_AGENT</title>
+  <script>
+    // Runs before first paint so the page never flashes the wrong theme.
+    (function () {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var stored = window.localStorage.getItem("my-agent-editor-theme");
+        var fromApp = (params.get("theme") || "").toLowerCase();
+        var prefersDark =
+          window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var theme =
+          stored ||
+          (fromApp === "dark" || fromApp === "light" ? fromApp : null) ||
+          (prefersDark ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (err) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+  </script>
+  <link rel="stylesheet" href="editor.css" />
+  <!-- Pinned CDN dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
+</head>
+<body>
+  <a class="skip-link" href="#canvas-wrap">Skip to canvas</a>
+
+  <header class="app-header" role="banner">
+    <div class="header-left">
+      <a id="back-link" class="back-link" href="../../" aria-label="Back to My_AGENT">&larr; Back</a>
+      <h1>CV Editor</h1>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="btn-theme" class="btn btn-secondary" aria-pressed="false" title="Switch between light and dark mode">
+        <span id="theme-icon" aria-hidden="true">&#9789;</span>
+        <span id="theme-label">Dark</span>
+      </button>
+      <label class="btn btn-secondary file-label" for="pdf-import" title="Import selectable-text PDF">
+        Import PDF
+        <input type="file" id="pdf-import" accept="application/pdf,.pdf" hidden />
+      </label>
+      <button type="button" id="btn-export" class="btn btn-primary" title="Export as PDF or DOCX">Export</button>
+    </div>
+  </header>
+
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+
+  <div class="app-body">
+    <aside class="sidebar" aria-label="Templates panel">
+      <h2>Templates</h2>
+      <p class="sidebar-hint">Click a design to open it with your imported CV content. Text facts are preserved; only the layout is rebuilt.</p>
+      <ul id="template-list" class="template-list" role="listbox" aria-label="CV templates"></ul>
+    </aside>
+
+    <main class="workspace">
+      <nav class="toolbar" aria-label="Editor toolbar">
+        <div class="toolbar-group" role="group" aria-label="Text tools">
+          <span class="group-label">Text</span>
+          <button type="button" id="btn-add-text" class="tool-btn" title="Add a new text box (T)"><span class="ico" aria-hidden="true">T</span>Add text</button>
+          <button type="button" id="btn-edit-text" class="tool-btn" title="Edit the selected text"><span class="ico" aria-hidden="true">&#9998;</span>Edit</button>
+          <button type="button" id="btn-duplicate" class="tool-btn" title="Duplicate selection (Ctrl+D)"><span class="ico" aria-hidden="true">&#10697;</span>Copy</button>
+          <button type="button" id="btn-delete" class="tool-btn danger" title="Delete selection (Del)"><span class="ico" aria-hidden="true">&#128465;</span>Delete</button>
+        </div>
+
+        <div class="toolbar-group" role="group" aria-label="Typography">
+          <span class="group-label">Font</span>
+          <label class="sr-only" for="font-family">Font</label>
+          <select id="font-family" aria-label="Font family">
+            <option value="Arial">Arial</option>
+            <option value="Helvetica">Helvetica</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Times New Roman">Times New Roman</option>
+            <option value="Courier New">Courier New</option>
+            <option value="Verdana">Verdana</option>
+          </select>
+          <label class="sr-only" for="font-size">Size</label>
+          <input type="number" id="font-size" min="6" max="96" value="14" aria-label="Font size" title="Font size" />
+          <button type="button" id="btn-bold" class="tool-btn icon-only toggle" title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed="false"><strong>B</strong></button>
+          <button type="button" id="btn-italic" class="tool-btn icon-only toggle" title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed="false"><em>I</em></button>
+          <label class="sr-only" for="text-color">Colour</label>
+          <input type="color" id="text-color" value="#000000" aria-label="Text colour" title="Text colour" />
+          <select id="text-align" aria-label="Text alignment" title="Alignment">
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+            <option value="justify">Justify</option>
+          </select>
+          <label class="sr-only" for="line-height">Line spacing</label>
+          <input type="number" id="line-height" min="0.8" max="3" step="0.1" value="1.2" aria-label="Line spacing" title="Line spacing" />
+          <label class="sr-only" for="opacity">Opacity</label>
+          <input type="range" id="opacity" min="0" max="1" step="0.05" value="1" aria-label="Opacity" title="Opacity" />
+        </div>
+
+        <div class="toolbar-group" role="group" aria-label="Shapes and media">
+          <span class="group-label">Insert</span>
+          <button type="button" id="btn-rect" class="tool-btn" title="Add a rectangle"><span class="ico" aria-hidden="true">&#9645;</span>Box</button>
+          <button type="button" id="btn-line" class="tool-btn" title="Add a line"><span class="ico" aria-hidden="true">&#9473;</span>Line</button>
+          <label class="tool-btn file-label" for="image-upload" title="Add a photo or logo">
+            <span class="ico" aria-hidden="true">&#128247;</span>Image
+            <input type="file" id="image-upload" accept="image/*" hidden />
+          </label>
+        </div>
+
+        <div class="toolbar-group" role="group" aria-label="Arrange">
+          <span class="group-label">Arrange</span>
+          <button type="button" id="btn-forward" class="tool-btn" title="Bring forward"><span class="ico" aria-hidden="true">&#8679;</span>Front</button>
+          <button type="button" id="btn-backward" class="tool-btn" title="Send backward"><span class="ico" aria-hidden="true">&#8681;</span>Back</button>
+          <button type="button" id="btn-lock" class="tool-btn toggle" title="Lock or unlock the selection" aria-pressed="false"><span class="ico" aria-hidden="true">&#128274;</span>Lock</button>
+        </div>
+
+        <div class="toolbar-group" role="group" aria-label="History">
+          <span class="group-label">History</span>
+          <button type="button" id="btn-undo" class="tool-btn" title="Undo (Ctrl+Z)"><span class="ico" aria-hidden="true">&#8630;</span>Undo</button>
+          <button type="button" id="btn-redo" class="tool-btn" title="Redo (Ctrl+Y)"><span class="ico" aria-hidden="true">&#8631;</span>Redo</button>
+          <button type="button" id="btn-clear" class="tool-btn" title="Remove everything on this page">Clear page</button>
+          <button type="button" id="btn-reset" class="tool-btn danger" title="Reset all pages and imported content">Reset all</button>
+        </div>
+
+        <div class="toolbar-group" role="group" aria-label="View">
+          <span class="group-label">Zoom</span>
+          <button type="button" id="btn-zoom-out" class="tool-btn icon-only" title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <span id="zoom-label" aria-live="polite">100%</span>
+          <button type="button" id="btn-zoom-in" class="tool-btn icon-only" title="Zoom in" aria-label="Zoom in">+</button>
+          <button type="button" id="btn-fit" class="tool-btn" title="Fit page to the window">Fit</button>
+        </div>
+
+        <div class="toolbar-group page-nav" role="group" aria-label="Pages">
+          <span class="group-label">Pages</span>
+          <button type="button" id="btn-prev-page" class="tool-btn icon-only" title="Previous page" aria-label="Previous page">&larr;</button>
+          <span id="page-label" aria-live="polite">Page 1 / 1</span>
+          <button type="button" id="btn-next-page" class="tool-btn icon-only" title="Next page" aria-label="Next page">&rarr;</button>
+          <button type="button" id="btn-add-page" class="tool-btn" title="Add a blank page">Add</button>
+          <button type="button" id="btn-remove-page" class="tool-btn danger" title="Remove the current page">Remove</button>
+        </div>
+      </nav>
+
+      <div id="canvas-wrap" class="canvas-wrap" tabindex="0" aria-label="CV canvas area">
+        <div id="canvas-scaler" class="canvas-scaler">
+          <canvas id="cv-canvas" aria-label="Editable CV page"></canvas>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="dialog-overlay" class="dialog-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+    <div class="dialog">
+      <h2 id="dialog-title">Edit text</h2>
+      <textarea id="dialog-text" rows="6" aria-label="Text content"></textarea>
+      <div class="dialog-actions">
+        <button type="button" id="dialog-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="button" id="dialog-ok" class="btn btn-primary">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-overlay" class="dialog-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <div class="dialog">
+      <h2 id="export-title">Download your CV</h2>
+      <p class="dialog-hint">Choose the file format you need for this application.</p>
+      <fieldset class="format-choice">
+        <legend class="sr-only">File format</legend>
+        <label class="format-option">
+          <input type="radio" name="export-format" value="pdf" checked />
+          <span>
+            <strong>PDF</strong>
+            <small>Exact visual copy of every page. Best for email and portals that accept PDF.</small>
+          </span>
+        </label>
+        <label class="format-option">
+          <input type="radio" name="export-format" value="docx" />
+          <span>
+            <strong>DOCX (Word)</strong>
+            <small>Text-only single-column Word file. Easiest for ATS parsing, but the freeform layout is not kept.</small>
+          </span>
+        </label>
+      </fieldset>
+      <div class="dialog-actions">
+        <button type="button" id="export-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="button" id="export-confirm" class="btn btn-primary">Download</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-overlay" class="dialog-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="preview-title">
+    <div class="dialog dialog-preview">
+      <h2 id="preview-title">Template preview</h2>
+      <img id="preview-image" alt="" />
+      <p id="preview-desc" class="dialog-hint"></p>
+      <div class="dialog-actions">
+        <button type="button" id="preview-close" class="btn btn-secondary">Close</button>
+        <button type="button" id="preview-apply" class="btn btn-primary">Use this template</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  </script>
+  <script src="editor.js"></script>
+</body>
+</html>

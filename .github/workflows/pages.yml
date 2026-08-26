@@ -26,10 +26,11 @@ jobs:
       # The in-browser app fetches these at runtime, so ship them with the page.
       - name: Assemble the published site
         run: |
-          mkdir -p _site/assets _site/profile
+          mkdir -p _site/assets _site/profile _site/static
           cp index.html app.py cv_engine.py ai_providers.py .nojekyll _site/
           cp assets/owner_photo.jpg _site/assets/
           cp profile/Satyam_Dev_Resume_ATS.pdf _site/profile/
+          cp -r static/editor _site/static/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

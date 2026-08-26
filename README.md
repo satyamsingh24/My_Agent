@@ -45,6 +45,10 @@ App khulte hi PIN popup aata hai. PIN: **6932** (hardcoded in `app.py` as `APP_P
     Ollama local-first hai; failure par configured Gemini aur Groq free-tier
     providers try ho sakte hain. Cloud API keys sirf current session memory mein
     rehti hain aur logout par clear ho jaati hain.
+17. **Templates → Edit Your CV** ek browser-only freeform editor kholta hai.
+    Selectable-text PDF import karke text boxes move/resize/rotate/edit karo,
+    fonts, colours, shapes, lines aur images use karo, 10 template previews mein
+    se koi design apply karo, undo/redo chalao aur PDF ya DOCX export karo.
 
 Har generated CV `profile/Satyam_Dev_Resume_ATS.pdf` ke reference layout ko follow
 karta hai: Name → Role → Contact → SUMMARY → SKILLS → JD-MATCHED SKILLS →
@@ -82,6 +86,43 @@ hardcoded hai, isliye real security boundary nahi hai. Gemini/Groq select ya
 fallback hone par uploaded CV aur JD us cloud provider ko bheje jaate hain.
 Missing JD skills AI khud add nahi karti; user ko pehle unhe truthful confirmation
 list mein tick karna padta hai.
+
+## Freeform CV editor
+
+Home page par **4. Templates** kholo:
+
+1. **Existing Templates** structured, JD-aligned aur ATS-safe CV flow kholta hai.
+2. **Edit Your CV** visual editor kholta hai. **Import PDF** se selectable-text
+   CV do; phir labelled toolbar ke text, insert, arrange, history, zoom aur page
+   tools use karo aur **Export** se format chuno.
+
+Left panel har template ka actual page preview image dikhata hai; kisi preview par
+click karne par imported CV ki information usi design mein editable objects ke roop
+mein rebuild ho jaati hai. Template switch sirf layout/style badalta hai; app nayi
+skill ya experience invent nahi karti. Preview images `static/editor/previews/`
+mein hain aur `CV_TEMPLATES` badalne ke baad
+`python -m scripts.export_template_previews` se regenerate hoti hain.
+
+Editor ke header mein apna dark/light switch hai. Pehli baar app se editor kholne
+par wahi theme use hoti hai jo app par selected hai; editor mein switch dabate hi
+choice browser ke localStorage mein save ho jaati hai. CV page hamesha white rehta
+hai kyunki wahi print/export hota hai.
+
+**Export** dialog do formats deta hai:
+
+- **PDF** har page ki exact visual copy deta hai.
+- **DOCX (Word)** canvas ke text ko single-column Word file mein likhta hai, jise
+  ATS aasani se parse karta hai; freeform positioning is file mein nahi rehti.
+
+CV/PDF browser ke andar process hota hai aur server par upload nahi hota. Scanned
+image-only PDFs mein selectable text nahi hota, isliye unhe editor import nahi
+kar sakta. Mobile par basic touch editing supported hai, lekin detailed layout
+editing desktop/laptop par easier hai. Editor ki pinned browser libraries load
+karne ke liye internet connection chahiye.
+
+Freeform columns, icons aur decorative elements ATS parsing ko weak kar sakte
+hain. MNC/job-portal application ke liye simple one-column result rakho; maximum
+ATS safety ke liye **Existing Templates** wala structured flow use karo.
 
 ## GitHub se clone karke run
 

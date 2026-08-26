@@ -438,6 +438,14 @@ def is_hosted() -> bool:
     return not _is_local_host(host)
 
 
+def freeform_editor_url() -> str:
+    """Static editor route for GitHub Pages/stlite and local Streamlit."""
+    theme = st.session_state.get("theme", "Dark").lower()
+    if is_hosted():
+        return f"./static/editor/index.html?return=../../&theme={theme}"
+    return f"/app/static/editor/index.html?return=../../../&theme={theme}"
+
+
 def current_cv() -> tuple[dict, str, bytes] | None:
     """Hosted visitors keep their CV in their own session, never on disk."""
     if is_hosted():
@@ -1283,13 +1291,52 @@ if screen == "home":
         with st.container(key="home_card_templates"):
             if st.button(
                 "🎨\n\n4. Templates\n\n"
-                "See template designs, pick one, then fill the same form.",
+                "Choose a template or open the freeform CV editor.",
                 key="home_templates",
                 use_container_width=True,
             ):
                 clear_cv_session()
                 st.session_state.pop("manual_generated", None)
+                go("templates_hub")
+
+elif screen == "templates_hub":
+    step(1, "Templates and CV Editor")
+    st.caption(
+        "Build a structured ATS-friendly CV from a template, or freely edit "
+        "your own selectable-text PDF in the visual editor."
+    )
+    template_choice, editor_choice = st.columns(2)
+    with template_choice:
+        with st.container(key="option4_template_choice"):
+            st.markdown("### 1. Existing Templates")
+            st.write(
+                "Choose from 10 ATS-friendly designs, fill in your details and "
+                "target JD, then download PDF, DOCX or XLSX."
+            )
+            if st.button(
+                "View 10 templates",
+                key="open_existing_templates",
+                type="primary",
+                use_container_width=True,
+            ):
                 go("templates")
+    with editor_choice:
+        with st.container(key="option4_editor_choice"):
+            st.markdown("### 2. Edit Your CV")
+            st.write(
+                "Upload your own PDF, edit text and design elements, switch "
+                "templates, and download the result as PDF or Word."
+            )
+            st.link_button(
+                "Open freeform CV editor",
+                freeform_editor_url(),
+                use_container_width=True,
+            )
+            st.caption(
+                "Your CV stays in this browser. Freeform columns and graphics "
+                "may be less reliable in company ATS systems."
+            )
+    exit_button("exit_templates_hub")
 
 elif screen == "templates":
     step(1, "Choose a template")

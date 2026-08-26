@@ -5,6 +5,7 @@ serverPort = 6932
 [server]
 headless = false
 port = 6932
+enableStaticServing = true
 
 [theme]
 base = "dark"

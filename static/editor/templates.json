@@ -1,0 +1,164 @@
+{
+  "sectionOrder": [
+    "SUMMARY",
+    "SKILLS",
+    "JD-MATCHED SKILLS",
+    "CORE COMPETENCIES",
+    "PROFESSIONAL EXPERIENCE",
+    "INTERNSHIPS",
+    "PROJECTS",
+    "EDUCATION",
+    "QUALIFICATION",
+    "CERTIFICATIONS",
+    "ACHIEVEMENTS",
+    "LANGUAGES",
+    "ADDITIONAL DETAILS"
+  ],
+  "sectionHeadings": [
+    "SUMMARY", "PROFILE", "PROFESSIONAL SUMMARY", "OBJECTIVE", "SKILLS",
+    "TECHNICAL SKILLS", "CORE SKILLS", "EXPERIENCE", "WORK EXPERIENCE",
+    "PROFESSIONAL EXPERIENCE", "PROJECTS", "EDUCATION", "CERTIFICATIONS",
+    "CERTIFICATES", "ACHIEVEMENTS", "LANGUAGES", "INTERNSHIP", "INTERNSHIPS",
+    "CORE COMPETENCIES", "KEY COMPETENCIES", "AREAS OF EXPERTISE",
+    "JD-MATCHED SKILLS", "ADDITIONAL DETAILS", "QUALIFICATION",
+    "QUALIFICATIONS", "ACADEMIC QUALIFICATION", "ACADEMIC QUALIFICATIONS"
+  ],
+  "headingAliases": {
+    "SUMMARY": "SUMMARY",
+    "PROFILE": "SUMMARY",
+    "OBJECTIVE": "SUMMARY",
+    "PROFESSIONAL SUMMARY": "SUMMARY",
+    "SKILLS": "SKILLS",
+    "TECHNICAL SKILLS": "SKILLS",
+    "CORE SKILLS": "SKILLS",
+    "CORE COMPETENCIES": "CORE COMPETENCIES",
+    "KEY COMPETENCIES": "CORE COMPETENCIES",
+    "AREAS OF EXPERTISE": "CORE COMPETENCIES",
+    "JD-MATCHED SKILLS": "JD-MATCHED SKILLS",
+    "EXPERIENCE": "PROFESSIONAL EXPERIENCE",
+    "WORK EXPERIENCE": "PROFESSIONAL EXPERIENCE",
+    "PROFESSIONAL EXPERIENCE": "PROFESSIONAL EXPERIENCE",
+    "INTERNSHIP": "INTERNSHIPS",
+    "INTERNSHIPS": "INTERNSHIPS",
+    "PROJECTS": "PROJECTS",
+    "EDUCATION": "EDUCATION",
+    "QUALIFICATION": "QUALIFICATION",
+    "QUALIFICATIONS": "QUALIFICATION",
+    "ACADEMIC QUALIFICATION": "QUALIFICATION",
+    "ACADEMIC QUALIFICATIONS": "QUALIFICATION",
+    "CERTIFICATIONS": "CERTIFICATIONS",
+    "CERTIFICATES": "CERTIFICATIONS",
+    "ACHIEVEMENTS": "ACHIEVEMENTS",
+    "LANGUAGES": "LANGUAGES",
+    "ADDITIONAL DETAILS": "ADDITIONAL DETAILS"
+  },
+  "dropHeadings": ["DECLARATION", "REFERENCES", "DECLARATION:"],
+  "proseSections": ["SUMMARY", "SKILLS", "JD-MATCHED SKILLS", "LANGUAGES"],
+  "entrySections": [
+    "PROFESSIONAL EXPERIENCE", "INTERNSHIPS", "PROJECTS", "EDUCATION",
+    "QUALIFICATION", "CERTIFICATIONS"
+  ],
+  "bulletSections": ["ACHIEVEMENTS", "CORE COMPETENCIES", "ADDITIONAL DETAILS"],
+  "templates": {
+    "reference": {
+      "label": "Reference Black & White",
+      "description": "Exact layout of the supplied reference CV: no colour, ruled headings, and tight spacing.",
+      "primary": "000000",
+      "accent": "000000",
+      "heading_fill": "FFFFFF",
+      "heading_text": "000000",
+      "ruled_headings": true,
+      "compact": true
+    },
+    "modern": {
+      "label": "Modern Blue",
+      "description": "A fresh blue design with softly highlighted section headings.",
+      "primary": "155E75",
+      "accent": "0E7490",
+      "heading_fill": "DDF3F7",
+      "heading_text": "155E75",
+      "ruled_headings": false,
+      "compact": false
+    },
+    "minimal": {
+      "label": "Clean Minimal",
+      "description": "A restrained charcoal design for a simple corporate CV.",
+      "primary": "20242C",
+      "accent": "4B5563",
+      "heading_fill": "E7E9ED",
+      "heading_text": "20242C",
+      "ruled_headings": false,
+      "compact": false
+    },
+    "classic_navy": {
+      "label": "Classic Navy",
+      "description": "Traditional navy headings for finance, consulting, and corporate roles.",
+      "primary": "172554",
+      "accent": "1E3A8A",
+      "heading_fill": "E8EEF9",
+      "heading_text": "172554",
+      "ruled_headings": true,
+      "compact": false
+    },
+    "executive_maroon": {
+      "label": "Executive Maroon",
+      "description": "A confident maroon design suited to senior and leadership profiles.",
+      "primary": "701A2C",
+      "accent": "9F1239",
+      "heading_fill": "FCE7EC",
+      "heading_text": "701A2C",
+      "ruled_headings": false,
+      "compact": true
+    },
+    "forest": {
+      "label": "Forest Professional",
+      "description": "Calm forest-green accents with clear, compact section bands.",
+      "primary": "14532D",
+      "accent": "15803D",
+      "heading_fill": "E5F5EA",
+      "heading_text": "14532D",
+      "ruled_headings": false,
+      "compact": true
+    },
+    "slate": {
+      "label": "Slate Technical",
+      "description": "Sharp slate styling for engineering, DevOps, and technical roles.",
+      "primary": "1E293B",
+      "accent": "475569",
+      "heading_fill": "E2E8F0",
+      "heading_text": "1E293B",
+      "ruled_headings": true,
+      "compact": true
+    },
+    "royal_purple": {
+      "label": "Royal Purple",
+      "description": "A polished purple layout for product, design, and technology roles.",
+      "primary": "581C87",
+      "accent": "7E22CE",
+      "heading_fill": "F3E8FF",
+      "heading_text": "581C87",
+      "ruled_headings": false,
+      "compact": false
+    },
+    "teal_compact": {
+      "label": "Teal Compact",
+      "description": "Space-efficient teal styling for candidates with detailed experience.",
+      "primary": "134E4A",
+      "accent": "0F766E",
+      "heading_fill": "DDF4F1",
+      "heading_text": "134E4A",
+      "ruled_headings": true,
+      "compact": true
+    },
+    "warm_gray": {
+      "label": "Warm Gray",
+      "description": "A neutral, understated format suitable for every professional domain.",
+      "primary": "292524",
+      "accent": "57534E",
+      "heading_fill": "EDEAE7",
+      "heading_text": "292524",
+      "ruled_headings": false,
+      "compact": false
+    }
+  }
+}
