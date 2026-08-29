@@ -28,6 +28,7 @@
   let canvas = null;
   let zoom = 1;
   let dirty = false;
+  let leavingEditor = false;
   let cvData = null;
   let importedPlainText = "";
   let activeTemplateId = null;
@@ -105,9 +106,33 @@
   function configureBackLink() {
     const params = new URLSearchParams(window.location.search);
     const ret = params.get("return") || "../../";
+    const retUrl = new URL(ret, window.location.href).href;
+    const ownTab = params.get("tab") === "new";
     const link = $("#back-link");
     link.href = ret;
     link.setAttribute("aria-label", "Back to previous page");
+    link.addEventListener("click", (event) => {
+      if (!ownTab) return;
+      // The app opens this editor in a tab of its own, and loading the app
+      // again would start a fresh locked session. Closing this tab instead
+      // lands the user on the app tab, still unlocked on the page they left.
+      event.preventDefault();
+      if (!confirmReplace("Leave the editor? Unsaved changes are lost.")) return;
+      leavingEditor = true;
+      const opener = window.opener && !window.opener.closed ? window.opener : null;
+      if (opener) {
+        try {
+          opener.focus();
+        } catch (err) {
+          // Focusing is a courtesy; closing this tab is what matters.
+        }
+      }
+      window.close();
+      window.setTimeout(() => {
+        // Only reached when the browser refuses to close the tab.
+        window.location.href = retUrl;
+      }, 250);
+    });
   }
 
   async function loadTemplates() {
@@ -1485,7 +1510,7 @@
 
     window.addEventListener("resize", fitToView);
     window.addEventListener("beforeunload", (event) => {
-      if (!dirty) return;
+      if (!dirty || leavingEditor) return;
       event.preventDefault();
       event.returnValue = "";
     });

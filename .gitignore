@@ -3,6 +3,10 @@
 .vscode/
 .idea/
 
+# Node tooling used only for UI checks
+node_modules/
+test-results/
+
 # Python
 __pycache__/
 *.py[cod]

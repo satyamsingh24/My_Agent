@@ -9,9 +9,9 @@ The app opens on a lock screen. Tap **Locked — tap unlock and enter your PIN**
 ## Features
 
 0. **Dark / Light mode** toggle in the top-right, and an **Exit to Front Page** button on every screen.
-1. **Upload CV** — upload any selectable-text PDF (DevOps, Python, Java, and similar roles).
+1. **Upload CV** — upload any selectable-text PDF (DevOps, Python, Java, and similar roles). Once a CV is saved, this screen reuses it and shows its name at the top; tick **Upload a different CV** to replace it.
 2. CV text is stored in local files on a local run.
-3. **Existing CV** — continue or replace the saved CV, then use the full job-description, ATS score, AI/fallback, and truthful rebuild workflow.
+3. The saved CV runs the same workflow as a fresh upload: job description, ATS score, AI/fallback, and truthful rebuild.
 4. Paste a complete job description.
 5. The app detects skills that appear in both the CV and the job description.
 6. Attractive ATS-safe one-column layout: readable Arial/Helvetica fonts, blue section headings, clean spacing, no columns, icons, or tables.

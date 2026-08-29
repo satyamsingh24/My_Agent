@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -95,7 +96,6 @@ THEMES = {
 
 st.session_state.setdefault("theme", "Dark")
 st.session_state.setdefault("screen", "home")
-st.session_state.setdefault("change_cv", False)
 st.session_state.setdefault("ai_settings", provider_settings())
 
 
@@ -274,14 +274,11 @@ def theme_css(theme_name: str) -> str:
         [class*="st-key-home_card_"] div.stButton > button:hover p:nth-child(3) {{
             color: {t["muted"]} !important;
         }}
-        .st-key-home_card_existing div.stButton > button {{
+        .st-key-home_card_make div.stButton > button {{
             animation-delay: .09s;
         }}
-        .st-key-home_card_make div.stButton > button {{
-            animation-delay: .18s;
-        }}
         .st-key-home_card_templates div.stButton > button {{
-            animation-delay: .27s;
+            animation-delay: .18s;
         }}
         .option-card::before {{
             content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
@@ -298,15 +295,27 @@ def theme_css(theme_name: str) -> str:
         }}
         .option-card h4 {{ margin: 0 0 .3rem; font-size: 1.12rem; }}
         .option-card p {{ margin: 0; color: {t["muted"]}; font-size: .9rem; }}
-        .st-key-theme_toggle div.stButton > button,
-        .st-key-ai_provider_button div.stButton > button {{
-            width: 3.1rem; min-height: 3.1rem; padding: 0;
-            border-radius: 50%; font-size: 1.35rem;
+        .st-key-back_bar [data-testid="stElementContainer"] {{
+            width: auto !important;
+        }}
+        .st-key-back_bar div.stButton > button {{
+            width: auto !important; min-height: 2.7rem;
+            padding: .45rem 1.05rem; border-radius: 12px;
+            font-size: .92rem; font-weight: 650;
             background: {t["panel"]}; border: 1.5px solid {t["border"]};
             box-shadow: {t["shadow"]};
         }}
-        .st-key-theme_toggle div.stButton > button:hover,
-        .st-key-ai_provider_button div.stButton > button:hover {{
+        /* These two carry a tooltip, so Streamlit wraps the button in an extra
+           hover target instead of the usual div.stButton. */
+        .st-key-theme_toggle button,
+        .st-key-ai_provider_button button {{
+            width: 3.1rem; min-height: 3.1rem; padding: 0;
+            border-radius: 50%; font-size: 1.35rem;
+            background: {t["panel"]}; border: 1.5px solid {t["border"]};
+            box-shadow: {t["shadow"]}; color: {t["text"]};
+        }}
+        .st-key-theme_toggle button:hover,
+        .st-key-ai_provider_button button:hover {{
             transform: rotate(-18deg) scale(1.08);
             background: linear-gradient(135deg, {t["accent"]}, {t["accent2"]});
         }}
@@ -549,12 +558,23 @@ def is_hosted() -> bool:
     return not _is_local_host(host)
 
 
+def is_browser_build() -> bool:
+    """True in the GitHub Pages build, where Python runs inside the browser."""
+    return sys.platform == "emscripten" or "pyodide" in sys.modules
+
+
 def freeform_editor_url() -> str:
-    """Static editor route for GitHub Pages/stlite and local Streamlit."""
+    """Static editor route for the GitHub Pages build and for Streamlit servers."""
     theme = st.session_state.get("theme", "Dark").lower()
-    if is_hosted():
-        return f"./static/editor/index.html?return=../../&theme={theme}"
-    return f"/app/static/editor/index.html?return=../../../&theme={theme}"
+    # tab=new tells the editor it lives in a tab of its own, so its Back link
+    # can close that tab instead of reloading the app into a locked session.
+    if is_browser_build():
+        return f"./static/editor/index.html?return=../../&theme={theme}&tab=new"
+    # A Streamlit server publishes ./static under /app/static, whether the
+    # visitor typed localhost or reached the same run over the network.
+    return (
+        f"/app/static/editor/index.html?return=../../../&theme={theme}&tab=new"
+    )
 
 
 def current_cv() -> tuple[dict, str, bytes] | None:
@@ -668,8 +688,23 @@ def animated_backdrop(theme_name: str) -> None:
     )
 
 
+NAV_HISTORY_LIMIT = 12
+
+
 def go(screen: str) -> None:
+    """Open a screen and remember where the user came from, for Back."""
+    current = st.session_state.get("screen", "home")
+    if current != screen:
+        history = st.session_state.setdefault("nav_history", [])
+        history.append(current)
+        del history[:-NAV_HISTORY_LIMIT]
     st.session_state["screen"] = screen
+    st.rerun()
+
+
+def go_back() -> None:
+    history = st.session_state.get("nav_history") or []
+    st.session_state["screen"] = history.pop() if history else "home"
     st.rerun()
 
 
@@ -678,7 +713,6 @@ def activate_cv(meta: dict, text: str, pdf_bytes: bytes) -> None:
     st.session_state["cv_text"] = text
     st.session_state["cv_pdf"] = pdf_bytes
     st.session_state["cv_ready"] = True
-    st.session_state.pop("generated", None)
 
 
 def clear_cv_session() -> None:
@@ -687,14 +721,11 @@ def clear_cv_session() -> None:
         "cv_text",
         "cv_pdf",
         "cv_ready",
-        "generated",
         "upload_generated",
         "upload_source",
-        "existing_ats_source",
         "manual_ats_source",
     ):
         st.session_state.pop(key, None)
-    st.session_state["change_cv"] = False
 
 
 def privacy_note() -> str:
@@ -721,7 +752,9 @@ def step(number: int, label: str) -> None:
 def exit_button(key: str) -> None:
     if st.button("✕  Exit to Front Page", key=key):
         clear_cv_session()
-        go("home")
+        st.session_state["nav_history"] = []
+        st.session_state["screen"] = "home"
+        st.rerun()
 
 
 @st.dialog("How to use My_AGENT")
@@ -1341,8 +1374,14 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
 
+screen = st.session_state["screen"]
 is_dark = st.session_state["theme"] == "Dark"
-spacer, ai_col, toggle_col = st.columns([7, 1, 1])
+back_col, ai_col, toggle_col = st.columns([7, 1, 1])
+with back_col:
+    if screen != "home":
+        with st.container(key="back_bar"):
+            if st.button("←  Back", key="top_back"):
+                go_back()
 with ai_col:
     with st.container(key="ai_provider_button"):
         if st.button(
@@ -1363,7 +1402,6 @@ with toggle_col:
 if st.session_state.get("show_ai_provider"):
     ai_provider_dialog()
 
-screen = st.session_state["screen"]
 if screen == "home":
     animated_backdrop(st.session_state["theme"])
     photo_backdrop(st.session_state["theme"])
@@ -1388,12 +1426,15 @@ existing = current_cv()
 
 if screen == "home":
     step(1, "Choose an option")
-    upload_note = (
-        "Upload a CV PDF. It stays in your own browser session only."
-        if is_hosted()
-        else "Upload a new CV PDF. Your details are saved on this computer."
-    )
-    left, right, third, fourth = st.columns(4)
+    if existing:
+        # The saved CV is reused straight from this card, so no separate
+        # "Existing CV" option is needed.
+        upload_note = f"Saved: {existing[0].get('original_name', 'CV.pdf')}"
+    elif is_hosted():
+        upload_note = "Upload a CV PDF. It stays in your own browser session only."
+    else:
+        upload_note = "Upload a new CV PDF. Your details are saved on this computer."
+    left, second, third = st.columns(3)
     with left:
         with st.container(key="home_card_upload"):
             if st.button(
@@ -1403,24 +1444,10 @@ if screen == "home":
             ):
                 clear_cv_session()
                 go("upload")
-    with right:
-        saved_name = (
-            existing[0].get("original_name", "CV.pdf")
-            if existing
-            else "No CV saved yet"
-        )
-        with st.container(key="home_card_existing"):
-            if st.button(
-                f"📁\n\n2. Existing CV\n\nSaved: {saved_name}",
-                key="home_existing",
-                use_container_width=True,
-            ):
-                clear_cv_session()
-                go("existing")
-    with third:
+    with second:
         with st.container(key="home_card_make"):
             if st.button(
-                "✍\n\n3. Make your CV\n\n"
+                "✍\n\n2. Make your CV\n\n"
                 "Fill in your details and build a simple ATS CV.",
                 key="home_make",
                 use_container_width=True,
@@ -1429,10 +1456,10 @@ if screen == "home":
                 st.session_state.pop("manual_generated", None)
                 st.session_state.pop("make_template", None)
                 go("make")
-    with fourth:
+    with third:
         with st.container(key="home_card_templates"):
             if st.button(
-                "🎨\n\n4. Templates\n\n"
+                "🎨\n\n3. Templates\n\n"
                 "Choose a template or open the freeform CV editor.",
                 key="home_templates",
                 use_container_width=True,
@@ -1513,21 +1540,40 @@ elif screen == "templates":
     exit_button("exit_templates")
 
 elif screen == "upload":
-    step(1, "Upload CV and add the job description")
+    step(1, "Your CV and the job description")
+    saved_meta = existing[0] if existing else None
+    if saved_meta:
+        st.markdown(
+            f"""
+            <div class="card">
+              <h4>Using: {saved_meta.get("original_name", "CV.pdf")}</h4>
+              <p>Saved: {saved_meta.get("uploaded_at", "-")} &nbsp;·&nbsp;
+              Extracted characters: {saved_meta.get("characters", "-")}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    # Outside the form, so ticking it reveals the uploader straight away.
+    replace_cv = bool(saved_meta) and st.checkbox(
+        "Upload a different CV",
+        key="upload_replace_cv",
+        help="Leave this off to reuse the CV shown above.",
+    )
     st.caption(
-        "Upload a selectable-text PDF. My_AGENT will rebuild its content as a "
-        "clean ATS-friendly DOCX and prioritise only skills already verified "
-        "in your CV."
+        "Paste the job description below. My_AGENT rebuilds your CV as a clean "
+        "ATS-friendly DOCX and prioritises only skills already verified in it."
     )
     with st.form("upload_cv_jd_form", clear_on_submit=False):
-        uploaded = st.file_uploader(
-            "Your CV (PDF)",
-            type=["pdf"],
-            help=(
-                "The PDF must contain selectable text. Scanned image PDFs are "
-                "not supported."
-            ),
-        )
+        uploaded = None
+        if replace_cv or not saved_meta:
+            uploaded = st.file_uploader(
+                "Your CV (PDF)",
+                type=["pdf"],
+                help=(
+                    "The PDF must contain selectable text. Scanned image PDFs "
+                    "are not supported."
+                ),
+            )
         upload_jd = st.text_area(
             "Job Description",
             height=260,
@@ -1543,26 +1589,36 @@ elif screen == "upload":
         )
 
     if upload_submit:
-        if uploaded is None:
+        if uploaded is None and not saved_meta:
             st.error("Please upload your CV in PDF format.")
+        elif uploaded is None and replace_cv:
+            st.error(
+                "Choose the new CV PDF, or untick **Upload a different CV** to "
+                "reuse the saved one."
+            )
         elif len(upload_jd.strip()) < 50:
             st.error("Please paste the complete JD (at least 50 characters).")
         else:
             try:
-                file_bytes = uploaded.getvalue()
                 with st.spinner("Reading the CV and preparing your ATS DOCX..."):
-                    extracted = extract_pdf_text(file_bytes)
-                    meta = store_cv(file_bytes, uploaded.name, extracted)
-                    activate_cv(meta, extracted, file_bytes)
+                    if uploaded is not None:
+                        file_bytes = uploaded.getvalue()
+                        cv_text = extract_pdf_text(file_bytes)
+                        meta = store_cv(file_bytes, uploaded.name, cv_text)
+                        source_name = uploaded.name
+                    else:
+                        meta, cv_text, file_bytes = existing
+                        source_name = meta.get("original_name", "CV.pdf")
+                    activate_cv(meta, cv_text, file_bytes)
                     st.session_state["upload_source"] = {
-                        "cv_text": extracted,
+                        "cv_text": cv_text,
                         "jd_text": upload_jd,
-                        "name": uploaded.name,
+                        "name": source_name,
                     }
                     st.session_state["upload_generated"] = build_upload_docx(
-                        extracted,
+                        cv_text,
                         upload_jd,
-                        uploaded.name,
+                        source_name,
                         ai_settings=st.session_state.get("ai_settings"),
                     )
             except Exception as exc:
@@ -1744,55 +1800,6 @@ elif screen == "upload":
             key="upload_docx_download",
         )
     exit_button("exit_upload")
-
-elif screen == "existing":
-    step(1, "Existing CV")
-    if existing is None:
-        st.warning(
-            "No CV is saved yet. Go back to the front page and choose **Upload CV**."
-        )
-    else:
-        meta, text, pdf_bytes = existing
-        st.markdown(
-            f"""
-            <div class="card">
-              <h4>{meta.get("original_name", "CV.pdf")}</h4>
-              <p>Saved: {meta.get("uploaded_at", "-")} &nbsp;·&nbsp;
-              Extracted characters: {meta.get("characters", len(text))}</p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        col_a, col_b = st.columns(2)
-        with col_a:
-            if st.button("Continue", type="primary"):
-                activate_cv(meta, text, pdf_bytes)
-                st.session_state["change_cv"] = False
-                st.rerun()
-        with col_b:
-            if st.button("Change CV"):
-                clear_cv_session()
-                st.session_state["change_cv"] = True
-                st.rerun()
-
-        if st.session_state.get("change_cv"):
-            replacement = st.file_uploader(
-                "New CV (PDF)", type=["pdf"], key="replacement_cv"
-            )
-            if replacement is not None:
-                try:
-                    replacement_bytes = replacement.getvalue()
-                    replacement_text = extract_pdf_text(replacement_bytes)
-                    if st.button("Save and continue", type="primary"):
-                        new_meta = store_cv(
-                            replacement_bytes, replacement.name, replacement_text
-                        )
-                        activate_cv(new_meta, replacement_text, replacement_bytes)
-                        st.session_state["change_cv"] = False
-                        st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
-    exit_button("exit_existing")
 
 elif screen == "profile":
     step(1, "My Profile")
@@ -2294,106 +2301,6 @@ elif screen == "make":
 
     exit_button("exit_make")
 
-
-if st.session_state.get("cv_ready") and screen == "existing":
-    meta = st.session_state["cv_meta"]
-    st.divider()
-    step(2, "Paste the job description")
-    st.caption(f"Selected CV: {meta.get('original_name', 'CV.pdf')}")
-    jd = st.text_area(
-        "Job Description",
-        height=260,
-        label_visibility="collapsed",
-        placeholder=(
-            "Paste the company, role, responsibilities, required skills and "
-            "experience here..."
-        ),
-    )
-
-    if st.button("⚡  Generate ATS CV", type="primary"):
-        if len(jd.strip()) < 50:
-            st.error("Please paste the complete JD (at least 50 characters).")
-        else:
-            try:
-                with st.spinner("Analysing CV, JD and AI suggestions..."):
-                    st.session_state["existing_ats_source"] = {
-                        "cv_text": st.session_state["cv_text"],
-                        "jd_text": jd,
-                        "name": meta.get("original_name", "Existing_CV.pdf"),
-                    }
-                    st.session_state["generated"] = build_upload_docx(
-                        st.session_state["cv_text"],
-                        jd,
-                        meta.get("original_name", "Existing_CV.pdf"),
-                        ai_settings=st.session_state.get("ai_settings"),
-                    )
-            except Exception as exc:
-                st.error(str(exc))
-
-    generated = st.session_state.get("generated")
-    existing_source = st.session_state.get("existing_ats_source")
-    if generated and existing_source and "data" in generated:
-        st.divider()
-        step(3, "How an ATS will read this CV")
-        render_ats_overview(generated)
-
-        match = generated["match"]
-        title = generated["report"]["title"]
-        confirmed_skills: list[str] = []
-        if match["missing"] or title["jd_title"]:
-            st.divider()
-            step(4, "Fix the gaps, then rebuild")
-        if match["missing"]:
-            confirmed_skills = st.multiselect(
-                "Skills the JD wants that are not in your saved CV",
-                options=match["missing"],
-                key="existing_confirm_skills",
-                help="Tick only skills you genuinely have.",
-            )
-        use_jd_title = False
-        if title["jd_title"] and (title["score"] or 0) < 100:
-            use_jd_title = st.checkbox(
-                f"Set my CV headline to \"{title['jd_title']}\"",
-                key="existing_use_jd_title",
-                help="Use only when your actual role matches this title.",
-            )
-        if match["missing"] or title["jd_title"]:
-            if st.button(
-                "🔁 Rebuild saved CV with my confirmations",
-                key="existing_rebuild",
-                use_container_width=True,
-            ):
-                try:
-                    with st.spinner("Rebuilding your ATS DOCX..."):
-                        st.session_state["generated"] = build_upload_docx(
-                            existing_source["cv_text"],
-                            existing_source["jd_text"],
-                            existing_source["name"],
-                            extra_skills=confirmed_skills,
-                            headline=(
-                                title["jd_title"] if use_jd_title else None
-                            ),
-                            ai_settings=st.session_state.get("ai_settings"),
-                        )
-                    st.rerun()
-                except Exception as exc:
-                    st.error(str(exc))
-
-        st.divider()
-        with st.expander("Preview ATS CV content"):
-            st.text(generated.get("text", ""))
-        st.download_button(
-            "⬇ Download ATS DOCX",
-            data=generated["data"],
-            file_name=generated["filename"],
-            mime=(
-                "application/vnd.openxmlformats-officedocument."
-                "wordprocessingml.document"
-            ),
-            type="primary",
-            use_container_width=True,
-            key="existing_docx_download",
-        )
 
 st.divider()
 st.markdown(
